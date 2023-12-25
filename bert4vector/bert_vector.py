@@ -11,25 +11,28 @@ from bert4vector.base import Base
 from bert4vector.utils import cos_sim, dot_score, semantic_search
 
 
-class Embedding:
-    def __init__(self, model_path=None, vocab_path=None, config_path=None, checkpoint_path=None, device='cpu') -> None:
+class SentenceModel:
+    def __init__(self, model_path=None, vocab_path=None, config_path=None, checkpoint_path=None, device='cpu', model_config=None) -> None:
         if model_path is not None:
             vocab_path = vocab_path or os.path.join(model_path, 'vocab.txt')
             config_path = config_path or os.path.join(model_path, 'config.json')
             checkpoint_path = checkpoint_path or [i for i in os.listdir(model_path) if i.endswith('.bin')]
         self.tokenizer = Tokenizer(vocab_path, do_lower_case=True)
-        self.model = build_transformer_model(config_path, checkpoint_path)
+        model_config = model_config or dict()
+        self.model = build_transformer_model(config_path, checkpoint_path, return_dict=True, **model_config).to(device)
         self.device = device
     
     def encode(
             self,
             sentences: Union[str, List[str]],
-            batch_size: int = 32,
+            batch_size: int = 8,
             pool_strategy='cls',
+            custom_layer=None,
             convert_to_numpy: bool = True,
             convert_to_tensor: bool = False,
             normalize_embeddings: bool = True,
             ):
+        embeddings = []
         if isinstance(sentences, str):
             sentences = [sentences]
         for i in range(0, len(sentences) // batch_size):
@@ -38,10 +41,14 @@ class Embedding:
             batch = self.tokenizer(sentences[start:end])
             batch_input = [torch.tensor(sequence_padding(item), device=self.device) for item in batch]
             output = self.model(batch_input)
-            hidden_state = output[0]
-            get_pool_emb(hidden_state, )
 
-        return
+            last_hidden_state = output.get('last_hidden_state')
+            pooler = output.get('pooled_output')
+            attention_mask = (last_hidden_state != self.tokenizer._token_pad_id).long()
+            embs = get_pool_emb(last_hidden_state, pooler, attention_mask, pool_strategy, custom_layer)
+            embeddings.extend(embs)
+
+        return embeddings
     
 
 class BertVector(Base):
@@ -53,7 +60,7 @@ class BertVector(Base):
         :param corpus: Corpus of documents to use for similarity queries.
         :param device: Device (like 'cuda' / 'cpu') to use for the computation.
         """
-        self.model = Embedding(model_path)
+        self.model = SentenceModel(model_path)
         self.score_functions = {'cos_sim': cos_sim, 'dot': dot_score}
         self.corpus = {}
         self.corpus_embeddings = []
