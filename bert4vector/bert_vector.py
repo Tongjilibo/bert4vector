@@ -2,54 +2,10 @@ from loguru import logger
 from typing import List, Union, Dict
 import numpy as np
 import json
-import os
-import torch
-from bert4torch.models import build_transformer_model
-from bert4torch.snippets import get_pool_emb, sequence_padding
-from bert4torch.tokenizers import Tokenizer
 from bert4vector.base import Base
+from bert4vector.sentence_model import SentenceModel
 from bert4vector.utils import cos_sim, dot_score, semantic_search
 
-
-class SentenceModel:
-    def __init__(self, model_path=None, vocab_path=None, config_path=None, checkpoint_path=None, device='cpu', model_config=None) -> None:
-        if model_path is not None:
-            vocab_path = vocab_path or os.path.join(model_path, 'vocab.txt')
-            config_path = config_path or os.path.join(model_path, 'config.json')
-            checkpoint_path = checkpoint_path or [i for i in os.listdir(model_path) if i.endswith('.bin')]
-        self.tokenizer = Tokenizer(vocab_path, do_lower_case=True)
-        model_config = model_config or dict()
-        self.model = build_transformer_model(config_path, checkpoint_path, return_dict=True, **model_config).to(device)
-        self.device = device
-    
-    def encode(
-            self,
-            sentences: Union[str, List[str]],
-            batch_size: int = 8,
-            pool_strategy='cls',
-            custom_layer=None,
-            convert_to_numpy: bool = True,
-            convert_to_tensor: bool = False,
-            normalize_embeddings: bool = True,
-            ):
-        embeddings = []
-        if isinstance(sentences, str):
-            sentences = [sentences]
-        for i in range(0, len(sentences) // batch_size):
-            start = i * batch_size
-            end = (i + 1) * batch_size
-            batch = self.tokenizer(sentences[start:end])
-            batch_input = [torch.tensor(sequence_padding(item), device=self.device) for item in batch]
-            output = self.model(batch_input)
-
-            last_hidden_state = output.get('last_hidden_state')
-            pooler = output.get('pooled_output')
-            attention_mask = (last_hidden_state != self.tokenizer._token_pad_id).long()
-            embs = get_pool_emb(last_hidden_state, pooler, attention_mask, pool_strategy, custom_layer)
-            embeddings.extend(embs)
-
-        return embeddings
-    
 
 class BertVector(Base):
     def __init__(self, model_path, corpus: Union[List[str], Dict[str, str]] = None):
@@ -125,7 +81,7 @@ class BertVector(Base):
         if isinstance(sentences, str):
             sentences = [sentences]
         
-        return self.encode(
+        return self.model.encode(
             sentences,
             batch_size=batch_size,
             show_progress_bar=show_progress_bar,
