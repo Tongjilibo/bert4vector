@@ -2,13 +2,13 @@ from loguru import logger
 from typing import List, Union, Dict
 import numpy as np
 import json
+from bert4torch.pipelines import Text2Vec
 from bert4vector.base import Base
-from bert4vector.sentence_model import SentenceModel
 from bert4vector.utils import cos_sim, dot_score, semantic_search
 
 
-class BertVector(Base):
-    def __init__(self, model_path, corpus: Union[List[str], Dict[str, str]] = None):
+class Bert4Vector(Base):
+    def __init__(self, model_path, corpus: Union[List[str], Dict[str, str]] = None, **model_config):
         """
         Initialize the similarity object.
         :param checkpoint_path: 模型权重地址
@@ -16,7 +16,7 @@ class BertVector(Base):
         :param corpus: Corpus of documents to use for similarity queries.
         :param device: Device (like 'cuda' / 'cpu') to use for the computation.
         """
-        self.model = SentenceModel(model_path)
+        self.model = Text2Vec(model_path, **model_config)
         self.score_functions = {'cos_sim': cos_sim, 'dot': dot_score}
         self.corpus = {}
         self.corpus_embeddings = []
@@ -34,7 +34,7 @@ class BertVector(Base):
         return base
     
     def add_corpus(self, corpus: Union[List[str], Dict[str, str]], batch_size: int = 32,
-                   normalize_embeddings: bool = True):
+                   normalize_embeddings: bool = True, pool_strategy=None):
         """
         使用文档chunk来转为向量
         :param corpus: 语料的碎片
@@ -54,11 +54,12 @@ class BertVector(Base):
         self.corpus.update(new_corpus)
         logger.info(f"Start computing corpus embeddings, new docs: {len(new_corpus)}")
 
-        corpus_embeddings = self.get_embeddings(
+        corpus_embeddings = self.encode(
             list(new_corpus.values()),
             batch_size=batch_size,
             show_progress_bar=True,
             normalize_embeddings=normalize_embeddings,
+            pool_strategy=pool_strategy
         ).tolist()
 
         if self.corpus_embeddings:
@@ -67,28 +68,29 @@ class BertVector(Base):
             self.corpus_embeddings = corpus_embeddings
         logger.info(f"Add {len(new_corpus)} docs, total: {len(self.corpus)}, emb len: {len(self.corpus_embeddings)}")
 
-    def get_embeddings(
+    def encode(
             self,
             sentences: Union[str, List[str]],
-            batch_size: int = 32,
+            batch_size: int = 8,
             show_progress_bar: bool = False,
+            pool_strategy=None,
+            custom_layer=None,
             convert_to_numpy: bool = True,
             convert_to_tensor: bool = False,
-            device: str = None,
-            normalize_embeddings: bool = True,
+            normalize_embeddings: bool = False,
+            max_seq_length: int = None
     ):
         """Returns the embeddings for a batch of sentences."""
-        if isinstance(sentences, str):
-            sentences = [sentences]
-        
         return self.model.encode(
             sentences,
             batch_size=batch_size,
             show_progress_bar=show_progress_bar,
+            pool_strategy=pool_strategy,
+            custom_layer=custom_layer,
             convert_to_numpy=convert_to_numpy,
             convert_to_tensor=convert_to_tensor,
-            device=device,
             normalize_embeddings=normalize_embeddings,
+            max_seq_length=max_seq_length
         )
     
     def similarity(self, a: Union[str, List[str]], b: Union[str, List[str]], score_function: str = "cos_sim", **kwargs):
@@ -104,8 +106,8 @@ class BertVector(Base):
             raise ValueError(f"score function: {score_function} must be either (cos_sim) for cosine similarity"
                              " or (dot) for dot product")
         score_function = self.score_functions[score_function]
-        text_emb1 = self.get_embeddings(a, **kwargs)
-        text_emb2 = self.get_embeddings(b, **kwargs)
+        text_emb1 = self.encode(a, **kwargs)
+        text_emb2 = self.encode(b, **kwargs)
 
         return score_function(text_emb1, text_emb2)
 
@@ -135,7 +137,7 @@ class BertVector(Base):
         result = {qid: {} for qid, query in queries.items()}
         queries_ids_map = {i: id for i, id in enumerate(list(queries.keys()))}
         queries_texts = list(queries.values())
-        queries_embeddings = self.get_embeddings(queries_texts, convert_to_tensor=True, **kwargs)
+        queries_embeddings = self.encode(queries_texts, convert_to_tensor=True, **kwargs)
         corpus_embeddings = np.array(self.corpus_embeddings, dtype=np.float32)
         all_hits = semantic_search(queries_embeddings, corpus_embeddings, top_k=topn, score_function=score_function)
         for idx, hits in enumerate(all_hits):
