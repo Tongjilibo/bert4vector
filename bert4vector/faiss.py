@@ -47,7 +47,7 @@ class FaissVector(BertVector):
     def load_embeddings(self, emb_path:str="faiss_emb.index"):
         self.index = faiss.read_index(emb_path)
     
-    def most_similar(self, queries: str|List[str]|Dict[str, str], topk:int=10, score_function:str="cos_sim", **kwargs):
+    def most_similar(self, queries: Union[List[str], Dict[str, str]], topk:int=10, score_function:str="cos_sim", **kwargs):
         queries, queries_embeddings, queries_ids_map = super().get_query_emb(queries, **kwargs)
         distance, idx = self.index.search(np.array(queries_embeddings, dtype=np.float32), topk)
         
