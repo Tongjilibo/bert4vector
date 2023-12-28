@@ -20,13 +20,13 @@
 - 安装稳定版
 
 ```shell
-pip install bert4vecotr
+pip install bert4vector
 ```
 
 - 安装最新版
 
 ```shell
-pip install git+https://github.com/Tongjilibo/bert4vecotr
+pip install git+https://github.com/Tongjilibo/bert4vector
 ```
 
 ## 2. 支持的句向量权重
