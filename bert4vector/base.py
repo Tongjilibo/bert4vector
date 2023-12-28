@@ -35,45 +35,26 @@ class Base:
         """Compute cosine distance between two texts."""
         raise NotImplementedError("cannot instantiate Abstract Base Class")
 
-    def most_similar(self, queries: Union[str, List[str], Dict[str, str]], topn: int = 10):
+    def most_similar(self, queries: Union[str, List[str], Dict[str, str]], topk: int = 10):
         """
-        Find the topn most similar texts to the query against the corpus.
+        Find the topk most similar texts to the query against the corpus.
         :param queries: Dict[str(query_id), str(query_text)] or List[str] or str
-        :param topn: int
+        :param topk: int
         :return: Dict[str, Dict[str, float]], {query_id: {corpus_id: similarity_score}, ...}
         """
         raise NotImplementedError("cannot instantiate Abstract Base Class")
 
-    def search(self, queries: Union[str, List[str], Dict[str, str]], topn: int = 10):
+    def search(self, queries: Union[str, List[str], Dict[str, str]], topk: int = 10):
         """
-        Find the topn most similar texts to the query against the corpus.
+        Find the topk most similar texts to the query against the corpus.
         :param queries: Dict[str(query_id), str(query_text)] or List[str] or str
-        :param topn: int
+        :param topk: int
         :return: Dict[str, Dict[str, float]], {query_id: {corpus_id: similarity_score}, ...}
         """
-        return self.most_similar(queries, topn=topn)
+        return self.most_similar(queries, topk=topk)
     
     def save_embeddings(index_path):
         pass
 
-    def load(save_embeddings):
-        pass
-
-    def build_index(self,
-                    sentences_or_file_path: Union[str, List[str]],
-                    ann_search: bool = False,
-                    gpu_index: bool = False,
-                    gpu_memory: int = 16,
-                    n_search: int = 64,
-                    batch_size: int = 64):
-        pass
-
-    def write_index(self, index_path: str):
-        if self.is_faiss_index:
-            import faiss
-            faiss.write_index(self.index["index"], index_path)
-        else:
-            np.savez(index_path, index=self.index["index"])
-    
-    def read_index(self, sentences_path: str, index_path: str, is_faiss_index: bool = True):
+    def load_embeddings(index_path):
         pass

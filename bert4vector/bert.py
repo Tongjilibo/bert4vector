@@ -7,7 +7,7 @@ from bert4vector.base import Base
 from bert4vector.utils import cos_sim, dot_score, semantic_search
 
 
-class Bert4Vector(Base):
+class BertVector(Base):
     def __init__(self, model_path, corpus: Union[List[str], Dict[str, str]] = None, **model_config):
         """
         Initialize the similarity object.
@@ -33,11 +33,15 @@ class Bert4Vector(Base):
             base += f", corpus size: {len(self.corpus)}"
         return base
     
+    def to(self, device):
+        self.model.to(device)
+        self.device = device
+
     def add_corpus(self, corpus: Union[List[str], Dict[str, str]], batch_size: int = 32,
-                   normalize_embeddings: bool = True, pool_strategy=None):
+                   normalize_embeddings: bool = True, **kwargs):
         """
         使用文档chunk来转为向量
-        :param corpus: 语料的碎片
+        :param corpus: 语料的list
         :param batch_size: batch size for computing embeddings
         :param normalize_embeddings: normalize embeddings before computing similarity
         :return: corpus, corpus embeddings
@@ -59,7 +63,7 @@ class Bert4Vector(Base):
             batch_size=batch_size,
             show_progress_bar=True,
             normalize_embeddings=normalize_embeddings,
-            pool_strategy=pool_strategy
+            **kwargs
         ).tolist()
 
         if self.corpus_embeddings:
@@ -93,7 +97,7 @@ class Bert4Vector(Base):
             max_seq_length=max_seq_length
         )
     
-    def similarity(self, a: Union[str, List[str]], b: Union[str, List[str]], score_function: str = "cos_sim", **kwargs):
+    def similarity(self, a: Union[str, List[str]], b: Union[str, List[str]], score_function:str="cos_sim", **kwargs):
         """
         Compute similarity between two texts.
         :param a: list of str or str
@@ -115,38 +119,79 @@ class Bert4Vector(Base):
         """Compute cosine distance between two texts."""
         return 1 - self.similarity(a, b)
 
-    def most_similar(self, queries: Union[str, List[str], Dict[str, str]], topn: int = 10,
-                     score_function: str = "cos_sim", **kwargs):
-        """
-        Find the topn most similar texts to the queries against the corpus.
-            It can be used for Information Retrieval / Semantic Search for corpora up to about 1 Million entries.
-        :param queries: str or list of str
-        :param topn: int
-        :param score_function: function to compute similarity, default cos_sim
-        :param kwargs: additional arguments for the similarity function
-        :return: Dict[str, Dict[str, float]], {query_id: {corpus_id: similarity_score}, ...}
-        """
+    def get_query_emb(self, queries, **kwargs):
         if isinstance(queries, str) or not hasattr(queries, '__len__'):
             queries = [queries]
         if isinstance(queries, list):
             queries = {id: query for id, query in enumerate(queries)}
+        queries_ids_map = {i: id for i, id in enumerate(list(queries.keys()))}
+        queries_texts = list(queries.values())
+        queries_embeddings = self.encode(queries_texts, convert_to_tensor=True, **kwargs)
+        return queries, queries_embeddings, queries_ids_map
+    
+    def most_similar(self, queries: Union[str, List[str], Dict[str, str]], topk:int=10,
+                     score_function:str="cos_sim", **kwargs):
+        """
+        Find the topk most similar texts to the queries against the corpus.
+            It can be used for Information Retrieval / Semantic Search for corpora up to about 1 Million entries.
+        :param queries:str or list of str
+        :param topk: int
+        :param score_function: function to compute similarity, default cos_sim
+        :param kwargs: additional arguments for the similarity function
+        :return: Dict[str, Dict[str, float]], {query_id: {corpus_id: similarity_score}, ...}
+        """
+
+        queries, queries_embeddings, queries_ids_map = self.get_query_emb(queries, **kwargs)
         if score_function not in self.score_functions:
             raise ValueError(f"score function: {score_function} must be either (cos_sim) for cosine similarity"
                              " or (dot) for dot product")
         score_function = self.score_functions[score_function]
-        result = {qid: {} for qid, query in queries.items()}
-        queries_ids_map = {i: id for i, id in enumerate(list(queries.keys()))}
-        queries_texts = list(queries.values())
-        queries_embeddings = self.encode(queries_texts, convert_to_tensor=True, **kwargs)
         corpus_embeddings = np.array(self.corpus_embeddings, dtype=np.float32)
-        all_hits = semantic_search(queries_embeddings, corpus_embeddings, top_k=topn, score_function=score_function)
+        all_hits = semantic_search(queries_embeddings, corpus_embeddings, top_k=topk, score_function=score_function)
+        
+        result = {}
         for idx, hits in enumerate(all_hits):
-            for hit in hits[0:topn]:
-                result[queries_ids_map[idx]][hit['corpus_id']] = hit['score']
+            items = []
+            for hit in hits[0:topk]:
+                corpus_id = hit['corpus_id']
+                items.append({**{'text': self.corpus[corpus_id]}, **hit})
+            result[queries[queries_ids_map[idx]]] = items
 
         return result
 
-    def save_embeddings(self, emb_path: str = "corpus_emb.json"):
+    def save(self, corpus_path=None, emb_path=None):
+        '''同时保存语料和embedding'''
+        if corpus_path is not None:
+            self.save_corpus(corpus_path)
+        else:
+            self.save_corpus()
+
+        if emb_path is not None:
+            self.save_embeddings(emb_path)
+        else:
+            self.save_embeddings()
+    
+    def load(self, corpus_path=None, emb_path=None):
+        '''同时加载语料和embedding'''
+        if corpus_path is not None:
+            self.load_corpus(corpus_path)
+        else:
+            self.load_corpus()
+
+        if emb_path is not None:
+            self.load_embeddings(emb_path)
+        else:
+            self.load_embeddings()
+    
+    def save_corpus(self, corpus_path:str="corpus.txt"):
+        with open(corpus_path, 'w', encoding='utf-8') as f:
+            f.writelines(self.corpus)
+    
+    def load_corpus(self, corpus_path:str="corpus.txt"):
+        with open(corpus_path, 'r', encoding='utf-8') as f:
+            self.corpus = f.readlines()
+
+    def save_embeddings(self, emb_path:str="corpus_emb.json"):
         """
         Save corpus embeddings to json file.
         :param emb_path: json file path
@@ -158,7 +203,7 @@ class Bert4Vector(Base):
             json.dump(corpus_emb, f, ensure_ascii=False)
         logger.debug(f"Save corpus embeddings to file: {emb_path}.")
 
-    def load_embeddings(self, emb_path: str = "corpus_emb.json"):
+    def load_embeddings(self, emb_path:str="corpus_emb.json"):
         """
         Load corpus embeddings from json file.
         :param emb_path: json file path
