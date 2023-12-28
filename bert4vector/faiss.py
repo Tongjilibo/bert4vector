@@ -60,3 +60,9 @@ class FaissVector(BertVector):
                 items.append({'text': self.corpus[j], 'corpus_id': j, 'score': k})
             results[queries[queries_ids_map[id_]]] = items
         return results
+
+
+class SentTransformersFaissVector(FaissVector):
+    def build_model(self, model_path, **model_config):
+        from sentence_transformers import SentenceTransformer
+        return SentenceTransformer(model_path)

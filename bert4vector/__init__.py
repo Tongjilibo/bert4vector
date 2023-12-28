@@ -5,5 +5,7 @@ from bert4vector.utils import *
 
 __all__ = [
     'BertVector',
-    'FaissVector'
+    'FaissVector',
+    'SentTransformersBertVector',
+    'SentTransformersFaissVector'
 ]

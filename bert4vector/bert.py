@@ -16,13 +16,16 @@ class BertVector(Base):
         :param corpus: Corpus of documents to use for similarity queries.
         :param device: Device (like 'cuda' / 'cpu') to use for the computation.
         """
-        self.model = Text2Vec(model_path, **model_config)
+        self.model = self.build_model(model_path, **model_config)
         self.score_functions = {'cos_sim': cos_sim, 'dot': dot_score}
         self.corpus = {}
         self.corpus_embeddings = []
         if corpus is not None:
             self.add_corpus(corpus)
 
+    def build_model(self, model_path, **model_config):
+        return Text2Vec(model_path, **model_config)
+        
     def __len__(self):
         """Get length of corpus."""
         return len(self.corpus)
@@ -219,3 +222,9 @@ class BertVector(Base):
             self.corpus_embeddings = corpus_embeddings
         except (IOError, json.JSONDecodeError):
             logger.error("Error: Could not load corpus embeddings from file.")
+
+
+class SentTransformersBertVector(BertVector):
+    def build_model(self, model_path, **model_config):
+        from sentence_transformers import SentenceTransformer
+        return SentenceTransformer(model_path)

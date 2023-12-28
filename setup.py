@@ -7,7 +7,7 @@ with open("README.md", "r", encoding='utf-8') as fh:
 
 setup(
     name='bert4vector',
-    version='v0.0.1',
+    version='v0.0.2',
     description='an elegant bert4vector',
     long_description=long_description,
     long_description_content_type="text/markdown",
