@@ -14,6 +14,6 @@ setup(
     license='MIT Licence',
     url='https://github.com/Tongjilibo/bert4vector',
     author='Tongjilibo',
-    install_requires=['torch>1.6', 'bert4torch==0.4.4'],
+    install_requires=['torch>1.6', 'bert4torch==0.4.4', 'loguru', 'numpy'],
     packages=find_packages()
 )
