@@ -14,6 +14,11 @@ class FaissVector(BertVector):
         super().__init__(*args, **kwargs)
         assert hasattr(faiss, "IndexFlatIP")
 
+    def reset(self):
+        '''重置向量库'''
+        super().reset()
+        self.index = None
+    
     def add_corpus(self, *args, ann_search:bool=False, gpu_index:bool=False,
                    gpu_memory:int=16, n_search:int=64, **kwargs):
         super().add_corpus(*args, **kwargs)

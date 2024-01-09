@@ -40,6 +40,11 @@ class BertVector(Base):
         self.model.to(device)
         self.device = device
 
+    def reset(self):
+        '''重置向量库'''
+        self.corpus = {}
+        self.corpus_embeddings = []
+
     def add_corpus(self, corpus: Union[List[str], Dict[str, str]], batch_size: int = 32,
                    normalize_embeddings: bool = True, **kwargs):
         """
