@@ -37,12 +37,14 @@ pip install git+https://github.com/Tongjilibo/bert4vector
 | embedding| text2vec-base-chinese |shibing624| [torch](https://huggingface.co/shibing624/text2vec-base-chinese) |[config](https://github.com/Tongjilibo/bert4torch/blob/master/examples/basic/embedding/moka-ai@m3e-base/bert4torch_config.json) |
 |          | m3e |moka-ai| [torch](https://huggingface.co/moka-ai) |[config](https://github.com/Tongjilibo/bert4torch/blob/master/examples/basic/embedding/shibing624@text2vec-base-chinese/bert4torch_config.json)|
 |          | bge |BAAI| [torch](huggingface.co) |[config](https://github.com/Tongjilibo/bert4torch/blob/master/examples/basic/embedding/moka-ai@m3e-base/bert4torch_config.json)|
+|          | gte |thenlper| [large-zh](https://huggingface.co/thenlper/gte-large-zh), [base-zh](https://huggingface.co/thenlper/gte-base-zh) |[large-zh](https://github.com/Tongjilibo/bert4torch/blob/master/examples/basic/embedding/thenlper@gte-large-zh/bert4torch_config.json), [base-zh](https://github.com/Tongjilibo/bert4torch/blob/master/examples/basic/embedding/thenlper@gte-base-zh/bert4torch_config.json)|
 
 ## 3. 版本历史
 
-|更新日期| bert4vector | bert4torch | 版本说明 |
-|------| ---------------- | ----------------- |----------- |
-|20231228| 0.0.2          | 0.4.4|初始版本，支持内存和faiss模式|
+|更新日期| bert4vector | 版本说明 |
+|------| ---------------- |----------- |
+|20240131| 0.0.2.post2   |去除对bert4torch的版本依赖|
+|20231228| 0.0.2        |初始版本，支持内存和faiss模式|
 
 ## 4. 更新历史：
 
