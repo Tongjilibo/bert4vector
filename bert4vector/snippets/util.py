@@ -18,11 +18,14 @@ def cos_sim(a: Union[torch.Tensor, np.ndarray], b: Union[torch.Tensor, np.ndarra
     Computes the cosine similarity cos_sim(a[i], b[j]) for all i and j.
     :return: Matrix with res[i][j]  = cos_sim(a[i], b[j])
     """
+    is_tensor = True
     if not isinstance(a, torch.Tensor):
         a = torch.tensor(a)
+        is_tensor = False
 
     if not isinstance(b, torch.Tensor):
         b = torch.tensor(b)
+        is_tensor = False
 
     if len(a.shape) == 1:
         a = a.unsqueeze(0)
@@ -32,7 +35,8 @@ def cos_sim(a: Union[torch.Tensor, np.ndarray], b: Union[torch.Tensor, np.ndarra
 
     a_norm = torch.nn.functional.normalize(a, p=2, dim=1)
     b_norm = torch.nn.functional.normalize(b, p=2, dim=1)
-    return torch.mm(a_norm, b_norm.transpose(0, 1))
+    scores = torch.mm(a_norm, b_norm.transpose(0, 1))
+    return scores if is_tensor else scores.numpy()
 
 
 def dot_score(a: Union[torch.Tensor, np.ndarray], b: Union[torch.Tensor, np.ndarray]):
@@ -40,11 +44,14 @@ def dot_score(a: Union[torch.Tensor, np.ndarray], b: Union[torch.Tensor, np.ndar
     Computes the dot-product dot_prod(a[i], b[j]) for all i and j.
     :return: Matrix with res[i][j]  = dot_prod(a[i], b[j])
     """
+    is_tensor = True
     if not isinstance(a, torch.Tensor):
         a = torch.tensor(a)
+        is_tensor = False
 
     if not isinstance(b, torch.Tensor):
         b = torch.tensor(b)
+        is_tensor = False
 
     if len(a.shape) == 1:
         a = a.unsqueeze(0)
@@ -52,7 +59,8 @@ def dot_score(a: Union[torch.Tensor, np.ndarray], b: Union[torch.Tensor, np.ndar
     if len(b.shape) == 1:
         b = b.unsqueeze(0)
 
-    return torch.mm(a, b.transpose(0, 1))
+    scores = torch.mm(a, b.transpose(0, 1))
+    return scores if is_tensor else scores.numpy()
 
 
 def pairwise_dot_score(a: Union[torch.Tensor, np.ndarray], b: Union[torch.Tensor, np.ndarray]):

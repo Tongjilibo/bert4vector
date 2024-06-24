@@ -156,7 +156,7 @@ class SimHashSimilarity(Base):
         sim_scores = self.similarity(a, b)
         return [1 - score for score in sim_scores]
 
-    def most_similar(self, queries: Union[str, List[str], Dict[int, str]], topn: int = 10):
+    def search(self, queries: Union[str, List[str], Dict[int, str]], topn: int = 10):
         """
         Find the topn most similar texts to the query against the corpus.
         :param queries: list of str or str
@@ -287,7 +287,7 @@ class TfidfSimilarity(Base):
         """Compute cosine distance between two keys."""
         return 1 - self.similarity(a, b)
 
-    def most_similar(self, queries: Union[str, List[str], Dict[int, str]], topn: int = 10):
+    def search(self, queries: Union[str, List[str], Dict[int, str]], topn: int = 10):
         """Find the topn most similar texts to the query against the corpus.
         :param queries: list of str or str
         :param topn: int
@@ -396,7 +396,7 @@ class BM25Similarity(Base):
         self.bm25 = BM25Okapi(corpus_seg)
         logger.info(f"Total corpus: {len(self.corpus)}")
 
-    def most_similar(self, queries: Union[str, List[str], Dict[int, str]], topn=10):
+    def search(self, queries: Union[str, List[str], Dict[int, str]], topn=10):
         """
         Find the topn most similar texts to the query against the corpus.
         :param queries: input query
@@ -505,7 +505,7 @@ class WordEmbeddingSimilarity(Base):
         """Compute cosine distance between two texts."""
         return 1 - self.similarity(a, b)
 
-    def most_similar(self, queries: Union[str, List[str], Dict[int, str]], topn: int = 10):
+    def search(self, queries: Union[str, List[str], Dict[int, str]], topn: int = 10):
         """
         Find the topn most similar texts to the query against the corpus.
         :param queries: list of str or str
@@ -695,7 +695,7 @@ class CilinSimilarity(Base):
         """Compute cosine distance between two texts."""
         return [1 - s for s in self.similarity(a, b)]
 
-    def most_similar(self, queries: Union[str, List[str], Dict[int, str]], topn: int = 10):
+    def search(self, queries: Union[str, List[str], Dict[int, str]], topn: int = 10):
         """Find the topn most similar texts to the query against the corpus."""
         if isinstance(queries, str) or not hasattr(queries, '__len__'):
             queries = [queries]
@@ -824,7 +824,7 @@ class HownetSimilarity(Base):
         """Compute Hownet distance between two keys."""
         return [1 - s for s in self.similarity(a, b)]
 
-    def most_similar(self, queries: Union[str, List[str], Dict[int, str]], topn: int = 10):
+    def search(self, queries: Union[str, List[str], Dict[int, str]], topn: int = 10):
         """Find the topn most similar texts to the query against the corpus."""
         if isinstance(queries, str) or not hasattr(queries, '__len__'):
             queries = [queries]
@@ -919,7 +919,7 @@ class SameCharsSimilarity(Base):
         """Compute cosine distance between two texts."""
         return [1 - s for s in self.similarity(a, b)]
 
-    def most_similar(self, queries: Union[str, List[str], Dict[int, str]], topn: int = 10):
+    def search(self, queries: Union[str, List[str], Dict[int, str]], topn: int = 10):
         """Find the topn most similar texts to the query against the corpus."""
         if isinstance(queries, str) or not hasattr(queries, '__len__'):
             queries = [queries]
@@ -1018,7 +1018,7 @@ class SequenceMatcherSimilarity(Base):
         """Compute cosine distance between two texts."""
         return [1 - s for s in self.similarity(a, b)]
 
-    def most_similar(self, queries: Union[str, List[str], Dict[int, str]], topn: int = 10):
+    def search(self, queries: Union[str, List[str], Dict[int, str]], topn: int = 10):
         """Find the topn most similar texts to the query against the corpus."""
         if isinstance(queries, str) or not hasattr(queries, '__len__'):
             queries = [queries]

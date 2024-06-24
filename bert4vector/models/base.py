@@ -34,21 +34,13 @@ class Base:
         """Compute cosine distance between two texts."""
         raise NotImplementedError("cannot instantiate Abstract Base Class")
 
-    def most_similar(self, queries: Union[str, List[str], Dict[str, str]], topk: int = 10):
+    def search(self, queries: Union[str, List[str]], topk: int = 10):
         """ 在候选语料中寻找和query的向量最近似的topk个结果
         :param queries: Dict[str(query_id), str(query_text)] or List[str] or str
         :param topk: int
         :return: Dict[str, Dict[str, float]], {query_id: {corpus_id: similarity_score}, ...}
         """
         raise NotImplementedError("cannot instantiate Abstract Base Class")
-
-    def search(self, queries: Union[str, List[str], Dict[str, str]], topk: int = 10):
-        """ 在候选语料中寻找和query的向量最近似的topk个结果
-        :param queries: Dict[str(query_id), str(query_text)] or List[str] or str
-        :param topk: int
-        :return: Dict[str, Dict[str, float]], {query_id: {corpus_id: similarity_score}, ...}
-        """
-        return self.most_similar(queries, topk=topk)
     
     def save_embeddings(index_path):
         pass

@@ -1,1 +1,0 @@
-from bert4vector.models import *

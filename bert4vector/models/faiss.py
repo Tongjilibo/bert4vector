@@ -74,7 +74,7 @@ class FaissVector(BertVector):
         '''从本地加载corpus_embeddings'''
         self.index = faiss.read_index(emb_path)
     
-    def most_similar(self, queries: Union[str, List[str], Dict[str, str]], topk:int=10, **kwargs) -> dict:
+    def search(self, queries: Union[str, List[str]], topk:int=10, **kwargs) -> dict:
         ''' 在候选语料中寻找和query的向量最近似的topk个结果
         :param queries: query语句/语句列表/语句字典
         :param topk: 对每条query需要召回topk条
@@ -85,8 +85,8 @@ class FaissVector(BertVector):
         >>> model = FaissVector('/data/pretrain_ckpt/simbert/sushen@simbert_chinese_tiny')
         >>> model.add_corpus(['你好', '我选你'], gpu_index=True)
         >>> model.add_corpus(['天气不错', '人很好看'], gpu_index=True)
-        >>> print(model.most_similar('你好', topk=2))
-        >>> print(model.most_similar(['你好', '天气晴']))
+        >>> print(model.search('你好', topk=2))
+        >>> print(model.search(['你好', '天气晴']))
 
         >>> # {'你好': [{'corpus_id': 0, 'score': 1.406428, 'text': '你好'},
         ... #           {'corpus_id': 3, 'score': 0.800828, 'text': '人很好看'}]} 

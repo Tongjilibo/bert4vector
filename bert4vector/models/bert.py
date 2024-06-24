@@ -2,7 +2,6 @@ from loguru import logger
 from typing import List, Union, Dict, Literal
 import numpy as np
 import json
-from bert4torch.pipelines import Text2Vec
 from .base import Base
 from bert4vector.snippets import cos_sim, dot_score, semantic_search
 
@@ -27,6 +26,7 @@ class BertVector(Base):
     def build_model(self, model_name_or_path, **model_config):
         '''初始化模型'''
         if self.model_type == 'bert4torch':
+            from bert4torch.pipelines import Text2Vec
             return Text2Vec(model_name_or_path, **model_config)
         elif self.model_type == 'sentence_transformers':
             from sentence_transformers import SentenceTransformer
@@ -145,7 +145,7 @@ class BertVector(Base):
         """计算两组texts之间的cos距离"""
         return 1 - self.similarity(a, b)
 
-    def get_query_emb(self, queries:Union[str, List[str], Dict[str, str]], **kwargs):
+    def get_query_emb(self, queries:Union[str, List[str]], **kwargs):
         '''获取query的句向量'''
         if isinstance(queries, str) or not hasattr(queries, '__len__'):
             queries = [queries]
@@ -156,14 +156,26 @@ class BertVector(Base):
         queries_embeddings = self.encode(queries_texts, convert_to_tensor=True, **kwargs)
         return queries, queries_embeddings, queries_ids_map
     
-    def most_similar(self, queries: Union[str, List[str], Dict[str, str]], topk:int=10,
-                     score_function:str="cos_sim", **kwargs):
+    def search(self, queries: Union[str, List[str]], topk:int=10, score_function:str="cos_sim", **kwargs):
         """ 在候选语料中寻找和query的向量最近似的topk个结果
         :param queries:str or list of str
         :param topk: int
         :param score_function: function to compute similarity, default cos_sim
         :param kwargs: additional arguments for the similarity function
         :return: Dict[str, Dict[str, float]], {query_id: {corpus_id: similarity_score}, ...}
+
+        Example:
+        ```python
+        >>> from bert4vector import BertVector
+        >>> model = BertVector('/data/pretrain_ckpt/simbert/sushen@simbert_chinese_tiny')
+        >>> model.add_corpus(['你好', '我选你'], gpu_index=True)
+        >>> model.add_corpus(['天气不错', '人很好看'], gpu_index=True)
+        >>> print(model.search('你好', topk=2))
+        >>> print(model.search(['你好', '天气晴']))
+
+        >>> # {'你好': [{'corpus_id': 0, 'score': 0.9999, 'text': '你好'},
+        ... #           {'corpus_id': 3, 'score': 0.5694, 'text': '人很好看'}]} 
+
         """
 
         queries, queries_embeddings, queries_ids_map = self.get_query_emb(queries, **kwargs)
