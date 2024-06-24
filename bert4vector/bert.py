@@ -1,30 +1,38 @@
 from loguru import logger
-from typing import List, Union, Dict
+from typing import List, Union, Dict, Literal
 import numpy as np
 import json
 from bert4torch.pipelines import Text2Vec
 from bert4vector.base import Base
-from bert4vector.utils import cos_sim, dot_score, semantic_search
+from bert4vector.utils.util import cos_sim, dot_score, semantic_search
 
 
 class BertVector(Base):
-    def __init__(self, model_path, corpus: Union[List[str], Dict[str, str]] = None, **model_config):
-        """
-        Initialize the similarity object.
-        :param checkpoint_path: 模型权重地址
-        :param config_path: 权重的config地址
-        :param corpus: Corpus of documents to use for similarity queries.
-        :param device: Device (like 'cuda' / 'cpu') to use for the computation.
-        """
-        self.model = self.build_model(model_path, **model_config)
+    """ 在内存中存储和检索向量
+    :param checkpoint_path: 模型权重地址
+    :param config_path: 权重的config地址
+    :param corpus: Corpus of documents to use for similarity queries.
+    :param device: Device (like 'cuda' / 'cpu') to use for the computation.
+    """
+    def __init__(self, model_name_or_path:str, model_type:Literal['bert4torch', 'sentence_transformers']='bert4torch', 
+                 corpus: Union[List[str], Dict[str, str]] = None, **model_config):
+        self.model_type = model_type
+        self.model = self.build_model(model_name_or_path, **model_config)
         self.score_functions = {'cos_sim': cos_sim, 'dot': dot_score}
         self.corpus = {}
         self.corpus_embeddings = []
         if corpus is not None:
             self.add_corpus(corpus)
 
-    def build_model(self, model_path, **model_config):
-        return Text2Vec(model_path, **model_config)
+    def build_model(self, model_name_or_path, **model_config):
+        '''初始化模型'''
+        if self.model_type == 'bert4torch':
+            return Text2Vec(model_name_or_path, **model_config)
+        elif self.model_type == 'sentence_transformers':
+            from sentence_transformers import SentenceTransformer
+            return SentenceTransformer(model_name_or_path, **model_config)
+        else:
+            raise ValueError(f'Args `model_type` {self.model_type} not supported')
         
     def __len__(self):
         """Get length of corpus."""
@@ -47,12 +55,10 @@ class BertVector(Base):
 
     def add_corpus(self, corpus: Union[List[str], Dict[str, str]], batch_size: int = 32,
                    normalize_embeddings: bool = True, **kwargs):
-        """
-        使用文档chunk来转为向量
+        """ 使用文档chunk来转为向量
         :param corpus: 语料的list
         :param batch_size: batch size for computing embeddings
         :param normalize_embeddings: normalize embeddings before computing similarity
-        :return: corpus, corpus embeddings
         """
         new_corpus = {}
         start_id = len(self.corpus) if self.corpus else 0
@@ -92,7 +98,20 @@ class BertVector(Base):
             normalize_embeddings: bool = False,
             max_seq_length: int = None
     ):
-        """Returns the embeddings for a batch of sentences."""
+        """ 把句子转换成向量
+        Returns the embeddings for a batch of sentences.
+        
+        Example:
+        ```python
+        >>> from bert4vector import BertVector
+        >>> model = BertVector('/data/pretrain_ckpt/simbert/sushen@simbert_chinese_tiny')   
+        >>> sentences = ['喜欢打篮球的男生喜欢什么样的女生', '西安下雪了？是不是很冷啊?', 
+        ...              '第一次去见女朋友父母该如何表现？', '小蝌蚪找妈妈怎么样', 
+        ...              '给我推荐一款红色的车', '我喜欢北京']
+        >>> vecs = model.encode(sentences, convert_to_numpy=True, normalize_embeddings=False)
+        >>> print(vecs.shape)
+        >>> print(vecs)
+        """
         return self.model.encode(
             sentences,
             batch_size=batch_size,
@@ -106,8 +125,7 @@ class BertVector(Base):
         )
     
     def similarity(self, a: Union[str, List[str]], b: Union[str, List[str]], score_function:str="cos_sim", **kwargs):
-        """
-        Compute similarity between two texts.
+        """ 计算两组texts之间的向量相似度
         :param a: list of str or str
         :param b: list of str or str
         :param score_function: function to compute similarity, default cos_sim
@@ -124,10 +142,11 @@ class BertVector(Base):
         return score_function(text_emb1, text_emb2)
 
     def distance(self, a: Union[str, List[str]], b: Union[str, List[str]]):
-        """Compute cosine distance between two texts."""
+        """计算两组texts之间的cos距离"""
         return 1 - self.similarity(a, b)
 
-    def get_query_emb(self, queries, **kwargs):
+    def get_query_emb(self, queries:Union[str, List[str], Dict[str, str]], **kwargs):
+        '''获取query的句向量'''
         if isinstance(queries, str) or not hasattr(queries, '__len__'):
             queries = [queries]
         if isinstance(queries, list):
@@ -139,9 +158,7 @@ class BertVector(Base):
     
     def most_similar(self, queries: Union[str, List[str], Dict[str, str]], topk:int=10,
                      score_function:str="cos_sim", **kwargs):
-        """
-        Find the topk most similar texts to the queries against the corpus.
-            It can be used for Information Retrieval / Semantic Search for corpora up to about 1 Million entries.
+        """ 在候选语料中寻找和query的向量最近似的topk个结果
         :param queries:str or list of str
         :param topk: int
         :param score_function: function to compute similarity, default cos_sim
@@ -192,6 +209,7 @@ class BertVector(Base):
             self.load_embeddings()
     
     def save_corpus(self, corpus_path:str="corpus.txt"):
+        '''保存语料到文件'''
         with open(corpus_path, 'w', encoding='utf-8') as f:
             f.writelines(self.corpus)
     
@@ -200,8 +218,7 @@ class BertVector(Base):
             self.corpus = f.readlines()
 
     def save_embeddings(self, emb_path:str="corpus_emb.json"):
-        """
-        Save corpus embeddings to json file.
+        """ 把语料向量保存到json文件中
         :param emb_path: json file path
         :return:
         """
@@ -212,8 +229,7 @@ class BertVector(Base):
         logger.debug(f"Save corpus embeddings to file: {emb_path}.")
 
     def load_embeddings(self, emb_path:str="corpus_emb.json"):
-        """
-        Load corpus embeddings from json file.
+        """ 从json文件中加载语料向量
         :param emb_path: json file path
         :return: list of corpus embeddings, dict of corpus ids map, dict of corpus
         """
@@ -227,9 +243,3 @@ class BertVector(Base):
             self.corpus_embeddings = corpus_embeddings
         except (IOError, json.JSONDecodeError):
             logger.error("Error: Could not load corpus embeddings from file.")
-
-
-class SentTransformersBertVector(BertVector):
-    def build_model(self, model_path, **model_config):
-        from sentence_transformers import SentenceTransformer
-        return SentenceTransformer(model_path)

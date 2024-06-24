@@ -35,8 +35,7 @@ class Base:
         raise NotImplementedError("cannot instantiate Abstract Base Class")
 
     def most_similar(self, queries: Union[str, List[str], Dict[str, str]], topk: int = 10):
-        """
-        Find the topk most similar texts to the query against the corpus.
+        """ 在候选语料中寻找和query的向量最近似的topk个结果
         :param queries: Dict[str(query_id), str(query_text)] or List[str] or str
         :param topk: int
         :return: Dict[str, Dict[str, float]], {query_id: {corpus_id: similarity_score}, ...}
@@ -44,8 +43,7 @@ class Base:
         raise NotImplementedError("cannot instantiate Abstract Base Class")
 
     def search(self, queries: Union[str, List[str], Dict[str, str]], topk: int = 10):
-        """
-        Find the topk most similar texts to the query against the corpus.
+        """ 在候选语料中寻找和query的向量最近似的topk个结果
         :param queries: Dict[str(query_id), str(query_text)] or List[str] or str
         :param topk: int
         :return: Dict[str, Dict[str, float]], {query_id: {corpus_id: similarity_score}, ...}
