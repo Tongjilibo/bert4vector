@@ -42,8 +42,8 @@ class Base:
         """
         raise NotImplementedError("cannot instantiate Abstract Base Class")
     
-    def save_embeddings(index_path):
+    def _save_embeddings(index_path):
         pass
 
-    def load_embeddings(index_path):
+    def _load_embeddings(index_path):
         pass

@@ -4,6 +4,7 @@ import numpy as np
 import json
 from .base import Base
 from bert4vector.snippets import cos_sim, dot_score, semantic_search
+from pathlib import Path
 
 
 class BertVector(Base):
@@ -19,7 +20,7 @@ class BertVector(Base):
         self.model = self.build_model(model_name_or_path, **model_config)
         self.score_functions = {'cos_sim': cos_sim, 'dot': dot_score}
         self.corpus = {}
-        self.corpus_embeddings = []
+        self.corpus_embeddings = {}
         if corpus is not None:
             self.add_corpus(corpus)
 
@@ -36,40 +37,53 @@ class BertVector(Base):
         
     def __len__(self):
         """Get length of corpus."""
-        return len(self.corpus)
+        return sum([len(i) for i in self.corpus.values()])
 
     def __str__(self):
         base = f"Similarity: {self.__class__.__name__}, matching_model: {self.model}"
         if self.corpus:
-            base += f", corpus size: {len(self.corpus)}"
+            for k, v in self.corpus.items():
+                base += f", sub_corpus={k}, data_size={len(v)}"  
+            base += f", total size: {len(self)}"
         return base
     
     def to(self, device):
         self.model.to(device)
         self.device = device
 
-    def reset(self):
+    def reset(self, name:str=None):
         '''重置向量库'''
-        self.corpus = {}
-        self.corpus_embeddings = []
+        if name is None:
+            self.corpus = {}
+            self.corpus_embeddings = {}
+        elif name in self.corpus:
+            self.corpus[name] = {}
+            self.corpus_embeddings[name] = []
+        else:
+            logger.error(f'Args `name`={name} not in {list(self.corpus.keys())}')
 
     def add_corpus(self, corpus: Union[List[str], Dict[str, str]], batch_size: int = 32,
-                   normalize_embeddings: bool = True, **kwargs):
+                   normalize_embeddings: bool = True, name:str='default', **kwargs):
         """ 使用文档chunk来转为向量
         :param corpus: 语料的list
         :param batch_size: batch size for computing embeddings
         :param normalize_embeddings: normalize embeddings before computing similarity
+        :param name: sub_corpus名
         """
         new_corpus = {}
-        start_id = len(self.corpus) if self.corpus else 0
+        if name not in self.corpus:
+            self.corpus[name] = {}
+            self.corpus_embeddings[name] = []
+        
+        start_id = len(self.corpus[name])
         for id, doc in enumerate(corpus):
             if isinstance(corpus, list):
-                if doc not in self.corpus.values():
+                if doc not in self.corpus[name].values():
                     new_corpus[start_id + id] = doc
             else:
-                if doc not in self.corpus.values():
+                if doc not in self.corpus[name].values():
                     new_corpus[id] = doc
-        self.corpus.update(new_corpus)
+        self.corpus[name].update(new_corpus)
         logger.info(f"Start computing corpus embeddings, new docs: {len(new_corpus)}")
 
         corpus_embeddings = self.encode(
@@ -80,11 +94,8 @@ class BertVector(Base):
             **kwargs
         ).tolist()
 
-        if self.corpus_embeddings:
-            self.corpus_embeddings = self.corpus_embeddings + corpus_embeddings
-        else:
-            self.corpus_embeddings = corpus_embeddings
-        logger.info(f"Add {len(new_corpus)} docs, total: {len(self.corpus)}, emb len: {len(self.corpus_embeddings)}")
+        self.corpus_embeddings[name] = self.corpus_embeddings[name] + corpus_embeddings
+        logger.info(f"Add {len(new_corpus)} docs for `{name}`, total: {len(self.corpus[name])}, emb len: {len(self.corpus_embeddings[name])}")
 
     def encode(
             self,
@@ -145,7 +156,7 @@ class BertVector(Base):
         """计算两组texts之间的cos距离"""
         return 1 - self.similarity(a, b)
 
-    def get_query_emb(self, queries:Union[str, List[str]], **kwargs):
+    def _get_query_emb(self, queries:Union[str, List[str]], **kwargs):
         '''获取query的句向量'''
         if isinstance(queries, str) or not hasattr(queries, '__len__'):
             queries = [queries]
@@ -156,12 +167,14 @@ class BertVector(Base):
         queries_embeddings = self.encode(queries_texts, convert_to_tensor=True, **kwargs)
         return queries, queries_embeddings, queries_ids_map
     
-    def search(self, queries: Union[str, List[str]], topk:int=10, score_function:str="cos_sim", **kwargs):
+    def search(self, queries: Union[str, List[str]], topk:int=10, score_function:str="cos_sim", name:str='default', **kwargs):
         """ 在候选语料中寻找和query的向量最近似的topk个结果
         :param queries:str or list of str
         :param topk: int
         :param score_function: function to compute similarity, default cos_sim
+        :param name: sub_corpus名
         :param kwargs: additional arguments for the similarity function
+
         :return: Dict[str, Dict[str, float]], {query_id: {corpus_id: similarity_score}, ...}
 
         Example:
@@ -178,12 +191,12 @@ class BertVector(Base):
 
         """
 
-        queries, queries_embeddings, queries_ids_map = self.get_query_emb(queries, **kwargs)
+        queries, queries_embeddings, queries_ids_map = self._get_query_emb(queries, **kwargs)
         if score_function not in self.score_functions:
             raise ValueError(f"score function: {score_function} must be either (cos_sim) for cosine similarity"
                              " or (dot) for dot product")
         score_function = self.score_functions[score_function]
-        corpus_embeddings = np.array(self.corpus_embeddings, dtype=np.float32)
+        corpus_embeddings = np.array(self.corpus_embeddings[name], dtype=np.float32)
         all_hits = semantic_search(queries_embeddings, corpus_embeddings, top_k=topk, score_function=score_function)
         
         result = {}
@@ -191,67 +204,67 @@ class BertVector(Base):
             items = []
             for hit in hits[0:topk]:
                 corpus_id = hit['corpus_id']
-                items.append({**{'text': self.corpus[corpus_id]}, **hit})
+                items.append({**{'text': self.corpus[name][corpus_id]}, **hit})
             result[queries[queries_ids_map[idx]]] = items
 
         return result
 
-    def save(self, corpus_path=None, emb_path=None):
+    def save(self, corpus_path:Path=None, emb_path:Path=None):
         '''同时保存语料和embedding'''
-        if corpus_path is not None:
-            self.save_corpus(corpus_path)
-        else:
-            self.save_corpus()
-
-        if emb_path is not None:
-            self.save_embeddings(emb_path)
-        else:
-            self.save_embeddings()
+        self._save_corpus(corpus_path)
+        self._save_embeddings(emb_path)
     
-    def load(self, corpus_path=None, emb_path=None):
+    def load(self, corpus_path:Path=None, emb_path:Path=None):
         '''同时加载语料和embedding'''
-        if corpus_path is not None:
-            self.load_corpus(corpus_path)
-        else:
-            self.load_corpus()
-
-        if emb_path is not None:
-            self.load_embeddings(emb_path)
-        else:
-            self.load_embeddings()
+        self._load_corpus(corpus_path)
+        self._load_embeddings(emb_path)
     
-    def save_corpus(self, corpus_path:str="corpus.txt"):
+    def _save_corpus(self, corpus_path:Path=None):
         '''保存语料到文件'''
+        corpus_path = "corpus.json" if corpus_path is None else corpus_path
         with open(corpus_path, 'w', encoding='utf-8') as f:
-            f.writelines(self.corpus)
+            json.dump(self.corpus, f, ensure_ascii=False, indent=4)
     
-    def load_corpus(self, corpus_path:str="corpus.txt"):
+    def _load_corpus(self, corpus_path:Path=None):
+        '''从文件加载语料'''
+        corpus_path = "corpus.json" if corpus_path is None else corpus_path
         with open(corpus_path, 'r', encoding='utf-8') as f:
-            self.corpus = f.readlines()
+            self.corpus = json.load(f)
+        for name, sub_corpus in self.corpus.items():
+            ids = list(sub_corpus.keys())
+            for id in ids:
+                sub_corpus[int(id)] = sub_corpus.pop(id)
 
-    def save_embeddings(self, emb_path:str="corpus_emb.json"):
+    def _save_embeddings(self, emb_path:Path=None):
         """ 把语料向量保存到json文件中
         :param emb_path: json file path
         :return:
         """
-        corpus_emb = {id: {"doc": self.corpus[id], "doc_emb": emb} for id, emb in
-                      zip(self.corpus.keys(), self.corpus_embeddings)}
+        emb_path = "corpus_emb.json" if emb_path is None else emb_path
+        corpus_emb = dict()
+        for name, sub_corpus in self.corpus.items():
+            corpus_emb[name] = {id: {"doc": sub_corpus[id], "doc_emb": emb} for id, emb in
+                                zip(sub_corpus.keys(), self.corpus_embeddings[name])}
         with open(emb_path, "w", encoding="utf-8") as f:
             json.dump(corpus_emb, f, ensure_ascii=False)
         logger.debug(f"Save corpus embeddings to file: {emb_path}.")
 
-    def load_embeddings(self, emb_path:str="corpus_emb.json"):
+    def _load_embeddings(self, emb_path:Path=None):
         """ 从json文件中加载语料向量
         :param emb_path: json file path
         :return: list of corpus embeddings, dict of corpus ids map, dict of corpus
         """
         try:
+            emb_path = "corpus_emb.json" if emb_path is None else emb_path
             with open(emb_path, "r", encoding="utf-8") as f:
                 corpus_emb = json.load(f)
-            corpus_embeddings = []
-            for id, corpus_dict in corpus_emb.items():
-                self.corpus[int(id)] = corpus_dict["doc"]
-                corpus_embeddings.append(corpus_dict["doc_emb"])
+            corpus_embeddings = dict()
+            for name, sub_corpus_emb in corpus_emb.items():
+                sub_corpus_embeddings = []
+                for id, corpus_dict in sub_corpus_emb.items():
+                    self.corpus[int(id)] = corpus_dict["doc"]
+                    sub_corpus_embeddings.append(corpus_dict["doc_emb"])
+                corpus_embeddings[name] = sub_corpus_embeddings
             self.corpus_embeddings = corpus_embeddings
         except (IOError, json.JSONDecodeError):
             logger.error("Error: Could not load corpus embeddings from file.")
