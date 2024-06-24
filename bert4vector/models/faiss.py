@@ -1,5 +1,5 @@
 from typing import Dict, List, Union
-from bert4vector.bert import BertVector
+from .bert import BertVector
 import importlib
 import math
 import numpy as np
@@ -74,16 +74,22 @@ class FaissVector(BertVector):
         '''从本地加载corpus_embeddings'''
         self.index = faiss.read_index(emb_path)
     
-    def most_similar(self, queries: Union[List[str], Dict[str, str]], topk:int=10, score_function:str="cos_sim", **kwargs):
+    def most_similar(self, queries: Union[str, List[str], Dict[str, str]], topk:int=10, **kwargs) -> dict:
         ''' 在候选语料中寻找和query的向量最近似的topk个结果
+        :param queries: query语句/语句列表/语句字典
+        :param topk: 对每条query需要召回topk条
+
         Example:
         ```python
         >>> from bert4vector import FaissVector
         >>> model = FaissVector('/data/pretrain_ckpt/simbert/sushen@simbert_chinese_tiny')
         >>> model.add_corpus(['你好', '我选你'], gpu_index=True)
         >>> model.add_corpus(['天气不错', '人很好看'], gpu_index=True)
-        >>> print(model.most_similar('你好'))
+        >>> print(model.most_similar('你好', topk=2))
         >>> print(model.most_similar(['你好', '天气晴']))
+
+        >>> # {'你好': [{'corpus_id': 0, 'score': 1.406428, 'text': '你好'},
+        ... #           {'corpus_id': 3, 'score': 0.800828, 'text': '人很好看'}]} 
         '''
         queries, queries_embeddings, queries_ids_map = super().get_query_emb(queries, **kwargs)
         distance, idx = self.index.search(np.array(queries_embeddings.cpu(), dtype=np.float32), topk)

@@ -1,4 +1,6 @@
-from bert4vector import BertVector
+''' 计算句子间相似度
+'''
+from bert4vector.models import BertVector
 
 text2vec = BertVector('/data/pretrain_ckpt/simbert/sushen@simbert_chinese_tiny')
 sent1 = ['喜欢打篮球的男生喜欢什么样的女生', '西安下雪了？是不是很冷啊?', '第一次去见女朋友父母该如何表现？', '小蝌蚪找妈妈怎么样', 

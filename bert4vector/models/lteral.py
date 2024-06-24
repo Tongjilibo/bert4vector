@@ -13,11 +13,11 @@ import numpy as np
 from loguru import logger
 from tqdm import tqdm
 
-from bert4vector.base import Base
-from bert4vector.utils.distance import string_hash, hamming_distance, longest_match_size
-from bert4vector.utils.rank_bm25 import BM25Okapi
-from bert4vector.utils.tfidf import TFIDF, load_stopwords, default_stopwords_file
-from bert4vector.utils.util import cos_sim, semantic_search
+from .base import Base
+from ..snippets.distance import string_hash, hamming_distance, longest_match_size
+from ..snippets.rank_bm25 import BM25Okapi
+from ..snippets.tfidf import TFIDF, load_stopwords, default_stopwords_file
+from ..snippets.util import cos_sim, semantic_search
 
 
 pwd_path = os.path.abspath(os.path.dirname(__file__))

@@ -3,8 +3,8 @@ from typing import List, Union, Dict, Literal
 import numpy as np
 import json
 from bert4torch.pipelines import Text2Vec
-from bert4vector.base import Base
-from bert4vector.utils.util import cos_sim, dot_score, semantic_search
+from .base import Base
+from bert4vector.snippets import cos_sim, dot_score, semantic_search
 
 
 class BertVector(Base):

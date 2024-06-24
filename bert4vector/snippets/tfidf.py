@@ -5,10 +5,6 @@
 """
 
 import os
-import jieba
-import jieba.posseg
-
-from jieba.analyse.tfidf import DEFAULT_IDF, _get_abs_path
 
 pwd_path = os.path.abspath(os.path.dirname(__file__))
 default_stopwords_file = os.path.join(pwd_path, '../data/stopwords.txt')
@@ -49,19 +45,25 @@ class IDFLoader:
 
 class TFIDF:
     def __init__(self, idf_path=None, stopwords=None):
+        import jieba
+        import jieba.posseg
+        from jieba.analyse.tfidf import DEFAULT_IDF, _get_abs_path
+
+        self.jieba = jieba
+        self._get_abs_path = _get_abs_path
         self.stopwords = stopwords if stopwords is not None else load_stopwords(default_stopwords_file)
         self.idf_loader = IDFLoader(idf_path or DEFAULT_IDF)
         self.idf_freq, self.median_idf = self.idf_loader.get_idf()
 
     def set_idf_path(self, idf_path):
-        new_abs_path = _get_abs_path(idf_path)
+        new_abs_path = self._get_abs_path(idf_path)
         if not os.path.isfile(new_abs_path):
             raise Exception("IDF file does not exist: " + new_abs_path)
         self.idf_loader.set_new_path(new_abs_path)
         self.idf_freq, self.median_idf = self.idf_loader.get_idf()
 
     def get_tfidf(self, sentence):
-        words = [word.word for word in jieba.posseg.cut(sentence) if word.flag[0] not in ['u', 'x', 'w']]
+        words = [word.word for word in self.jieba.posseg.cut(sentence) if word.flag[0] not in ['u', 'x', 'w']]
         words = [word for word in words if word.lower() not in self.stopwords or len(word.strip()) < 2]
         word_idf = {word: self.idf_freq.get(word, self.median_idf) for word in words}
 

@@ -1,4 +1,6 @@
-from bert4vector import BertVector
+'''直接在内存进行语义检索
+'''
+from bert4vector.models import BertVector
 
 model = BertVector('/data/pretrain_ckpt/simbert/sushen@simbert_chinese_tiny')
 
