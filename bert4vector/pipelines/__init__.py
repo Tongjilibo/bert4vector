@@ -1,1 +1,1 @@
-from .api_faiss import *
+from .api import *

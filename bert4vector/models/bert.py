@@ -53,77 +53,6 @@ class BertVector(Base):
         self.model.to(device)
         self.device = device
 
-    def reset(self, name:str=None):
-        '''重置向量库'''
-        if name is None:
-            self.corpus = {}
-            self.corpus_embeddings = {}
-        elif name in self.corpus:
-            self.corpus[name] = {}
-            self.corpus_embeddings[name] = []
-        else:
-            logger.error(f'Args `name`={name} not in {list(self.corpus.keys())}')
-
-    def summary(self, random_sample:bool=False, sample_count:int=2, verbose:int=1):
-        '''统计一个各个sub_corpus的情况'''
-        json_format, table_format = {}, []
-        for name, sub_corpus in self.corpus.items():
-            len_sub_corpus = len(sub_corpus)
-            # 抽取少量样本
-            if len_sub_corpus <= sample_count:
-                smp_sub_corpus = list(sub_corpus.values())
-            elif random_sample:
-                smp_sub_corpus = random.sample(list(sub_corpus.values()), sample_count)
-            else:
-                smp_sub_corpus = []
-                for v in sub_corpus.values():
-                    if len(smp_sub_corpus) >= sample_count:
-                        break
-                    smp_sub_corpus.append(v)
-            json_format[name] = {'size': len_sub_corpus, 'few_samples': smp_sub_corpus}
-            table_format.append({**{'name': name}, **json_format[name]})
-        
-        if verbose != 0:
-            logger.info('Corpus distribution statistics')
-            print_table(table_format)
-        return json_format
-
-
-    def add_corpus(self, corpus: Union[List[str], Dict[str, str]], batch_size: int = 32,
-                   normalize_embeddings: bool = True, name:str='default', **kwargs):
-        """ 使用文档chunk来转为向量
-        :param corpus: 语料的list
-        :param batch_size: batch size for computing embeddings
-        :param normalize_embeddings: normalize embeddings before computing similarity
-        :param name: sub_corpus名
-        """
-        new_corpus = {}
-        if name not in self.corpus:
-            self.corpus[name] = {}
-            self.corpus_embeddings[name] = []
-        
-        start_id = len(self.corpus[name])
-        for id, doc in enumerate(corpus):
-            if isinstance(corpus, list):
-                if doc not in self.corpus[name].values():
-                    new_corpus[start_id + id] = doc
-            else:
-                if doc not in self.corpus[name].values():
-                    new_corpus[id] = doc
-        self.corpus[name].update(new_corpus)
-        logger.info(f"Start computing corpus embeddings, new docs: {len(new_corpus)}")
-
-        corpus_embeddings = self.encode(
-            list(new_corpus.values()),
-            batch_size=batch_size,
-            show_progress_bar=True,
-            normalize_embeddings=normalize_embeddings,
-            **kwargs
-        ).tolist()
-
-        self.corpus_embeddings[name] = self.corpus_embeddings[name] + corpus_embeddings
-        logger.info(f"Add {len(new_corpus)} docs for `{name}`, total: {len(self.corpus[name])}, emb len: {len(self.corpus_embeddings[name])}")
-
     def encode(
             self,
             sentences: Union[str, List[str]],
@@ -162,7 +91,7 @@ class BertVector(Base):
             max_seq_length=max_seq_length
         )
     
-    def similarity(self, a: Union[str, List[str]], b: Union[str, List[str]], score_function:str="cos_sim", **kwargs):
+    def similarity(self, a: Union[str, List[str]], b: Union[str, List[str]], score_function:str="cos_sim", **encode_kwargs):
         """ 计算两组texts之间的向量相似度
         :param a: list of str or str
         :param b: list of str or str
@@ -174,8 +103,8 @@ class BertVector(Base):
             raise ValueError(f"score function: {score_function} must be either (cos_sim) for cosine similarity"
                              " or (dot) for dot product")
         score_function = self.score_functions[score_function]
-        text_emb1 = self.encode(a, **kwargs)
-        text_emb2 = self.encode(b, **kwargs)
+        text_emb1 = self.encode(a, **encode_kwargs)
+        text_emb2 = self.encode(b, **encode_kwargs)
 
         return score_function(text_emb1, text_emb2)
 
@@ -183,24 +112,84 @@ class BertVector(Base):
         """计算两组texts之间的cos距离"""
         return 1 - self.similarity(a, b)
 
-    def _get_query_emb(self, queries:Union[str, List[str]], **kwargs):
-        '''获取query的句向量'''
-        if isinstance(queries, str) or not hasattr(queries, '__len__'):
-            queries = [queries]
-        if isinstance(queries, list):
-            queries = {id: query for id, query in enumerate(queries)}
-        queries_ids_map = {i: id for i, id in enumerate(list(queries.keys()))}
-        queries_texts = list(queries.values())
-        queries_embeddings = self.encode(queries_texts, convert_to_tensor=True, **kwargs)
-        return queries, queries_embeddings, queries_ids_map
+    def reset(self, name:str=None):
+        '''重置向量库'''
+        if name is None:
+            self.corpus = {}
+            self.corpus_embeddings = {}
+        elif name in self.corpus:
+            self.corpus[name] = {}
+            self.corpus_embeddings[name] = []
+        else:
+            logger.error(f'Args `name`={name} not in {list(self.corpus.keys())}')
+
+    def summary(self, random_sample:bool=False, sample_count:int=2, verbose:int=1):
+        '''统计一个各个sub_corpus的情况'''
+        json_format, table_format = {}, []
+        for name, sub_corpus in self.corpus.items():
+            len_sub_corpus = len(sub_corpus)
+            # 抽取少量样本
+            if len_sub_corpus <= sample_count:
+                smp_sub_corpus = list(sub_corpus.values())
+            elif random_sample:
+                smp_sub_corpus = random.sample(list(sub_corpus.values()), sample_count)
+            else:
+                smp_sub_corpus = []
+                for v in sub_corpus.values():
+                    if len(smp_sub_corpus) >= sample_count:
+                        break
+                    smp_sub_corpus.append(v)
+            json_format[name] = {'size': len_sub_corpus, 'few_samples': smp_sub_corpus}
+            table_format.append({**{'name': name}, **json_format[name]})
+        
+        if verbose != 0:
+            logger.info('Corpus distribution statistics')
+            print_table(table_format)
+        return json_format
+
+    def add_corpus(self, corpus: Union[List[str], Dict[str, str]], name:str='default', **encode_kwargs):
+        """ 使用文档chunk来转为向量
+        :param corpus: 语料的list
+        :param name: sub_corpus名
+
+        >>> encode_kwargs参数
+        :param batch_size: batch size for computing embeddings
+        :param normalize_embeddings: normalize embeddings before computing similarity
+        """
+        new_corpus = {}
+        if name not in self.corpus:
+            self.corpus[name] = {}
+            self.corpus_embeddings[name] = []
+        
+        id = len(self.corpus[name])
+        for doc in corpus:
+            if isinstance(corpus, list):
+                if doc not in self.corpus[name].values():
+                    new_corpus[id] = doc
+                    id += 1
+            else:
+                if doc not in self.corpus[name].values():
+                    new_corpus[id] = doc
+                    id += 1
+        self.corpus[name].update(new_corpus)
+        logger.info(f"Start computing corpus embeddings, new docs: {len(new_corpus)}")
+
+        corpus_embeddings = self.encode(
+            list(new_corpus.values()),
+            show_progress_bar=True,
+            **encode_kwargs
+        ).tolist()
+
+        self.corpus_embeddings[name] = self.corpus_embeddings[name] + corpus_embeddings
+        logger.info(f"Add {len(new_corpus)} docs for `{name}`, total: {len(self.corpus[name])}, emb len: {len(self.corpus_embeddings[name])}")
     
-    def search(self, queries: Union[str, List[str]], topk:int=10, score_function:str="cos_sim", name:str='default', **kwargs):
+    def search(self, queries: Union[str, List[str]], topk:int=10, score_function:str="cos_sim", name:str='default', **encode_kwargs):
         """ 在候选语料中寻找和query的向量最近似的topk个结果
         :param queries:str or list of str
         :param topk: int
         :param score_function: function to compute similarity, default cos_sim
         :param name: sub_corpus名
-        :param kwargs: additional arguments for the similarity function
+        :param encode_kwargs: additional arguments for the similarity function
 
         :return: Dict[str, Dict[str, float]], {query_id: {corpus_id: similarity_score}, ...}
 
@@ -218,7 +207,7 @@ class BertVector(Base):
 
         """
 
-        queries, queries_embeddings, queries_ids_map = self._get_query_emb(queries, **kwargs)
+        queries, queries_embeddings, queries_ids_map = self._get_query_emb(queries, **encode_kwargs)
         if score_function not in self.score_functions:
             raise ValueError(f"score function: {score_function} must be either (cos_sim) for cosine similarity"
                              " or (dot) for dot product")
@@ -246,6 +235,17 @@ class BertVector(Base):
         self._load_corpus(corpus_path)
         self._load_embeddings(emb_path)
     
+    def _get_query_emb(self, queries:Union[str, List[str]], **encode_kwargs):
+        '''获取query的句向量'''
+        if isinstance(queries, str) or not hasattr(queries, '__len__'):
+            queries = [queries]
+        if isinstance(queries, list):
+            queries = {id: query for id, query in enumerate(queries)}
+        queries_ids_map = {i: id for i, id in enumerate(list(queries.keys()))}
+        queries_texts = list(queries.values())
+        queries_embeddings = self.encode(queries_texts, convert_to_tensor=True, **encode_kwargs)
+        return queries, queries_embeddings, queries_ids_map
+
     def _save_corpus(self, corpus_path:Path=None):
         '''保存语料到文件'''
         corpus_path = "corpus.json" if corpus_path is None else corpus_path
