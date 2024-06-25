@@ -31,7 +31,7 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--port', default=8001)
-    parser.add_argument('--mode', default='client_aiohttp', choices=['server', 'client_request', 'client_aiohttp'])
+    parser.add_argument('--mode', default='server', choices=['server', 'client_request', 'client_aiohttp'])
     args = parser.parse_args()
     port = int(args.port)
 
