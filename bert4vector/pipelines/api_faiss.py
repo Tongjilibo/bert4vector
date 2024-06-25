@@ -5,7 +5,12 @@ import os
 from loguru import logger
 from bert4vector.models import BertVector
 from bert4vector.snippets import cos_sim
-from bert4torch.snippets import is_pydantic_available
+from bert4torch.snippets import is_pydantic_available, is_fastapi_available
+if is_fastapi_available():
+    from fastapi import FastAPI, APIRouter, status
+    from fastapi.responses import JSONResponse
+    from starlette.middleware.cors import CORSMiddleware
+
 if is_pydantic_available():
     from pydantic import BaseModel, Field
 else:
@@ -13,8 +18,24 @@ else:
 
 
 class Query(BaseModel):
-    input: Union[str, List] = Field(..., max_length=512)
+    query: Union[str, List]
 
+class Corpus(BaseModel):
+    texts: Union[str, List]
+    batch_size: int = 32
+    normalize_embeddings: bool = True
+    name: str = 'default'
+
+class Similarity(BaseModel):
+    query1: Union[str, List]
+    query2: Union[str, List]
+    score_function : str="cos_sim"
+
+class Search(BaseException):
+    query: Union[str, List]
+    topk: int = 10
+    score_function: str = "cos_sim"
+    name: str = 'default'
 
 class EmbeddingSever:
     """
@@ -37,10 +58,6 @@ class EmbeddingSever:
     ```
     """
     def __init__(self, model_name_or_path: str, debug: bool = False, **model_config):
-        from fastapi import FastAPI
-        from fastapi import FastAPI, HTTPException, APIRouter, Depends
-        from starlette.middleware.cors import CORSMiddleware
-
         logger.info("starting boot of bert server")
         self.model = BertVector(model_name_or_path, **model_config)
         logger.info(f'Load model success. model: {model_name_or_path}')
@@ -56,6 +73,7 @@ class EmbeddingSever:
         
         router = APIRouter()
         router.add_api_route('/', methods=['GET'], endpoint=self.index)
+        router.add_api_route('/summary', methods=['POST'], endpoint=self.summary)  # 查询语料库目前分布
         router.add_api_route('/add_corpus', methods=['POST'], endpoint=self.add_corpus)  # 添加语料库
         router.add_api_route('/encode', methods=['POST'], endpoint=self.encode)  # 获取句向量
         router.add_api_route('/similarity', methods=['POST'], endpoint=self.similarity)  # 计算句子相似度
@@ -65,18 +83,24 @@ class EmbeddingSever:
     async def index(self):
         return {"message": "index, docs url: /docs"}
 
-    async def add_corpus(self, corpus: Query, batch_size: int = 32, normalize_embeddings: bool = True):
+    async def summary(self, random_sample:bool=False, sample_count:int=2):
+        return self.model.summary(random_sample, sample_count, verbose=0)
+
+    async def add_corpus(self, req: Corpus):
         '''添加语料库'''
         try:
-            q = corpus.input
-            self.model.add_corpus(q, batch_size, normalize_embeddings)
-            logger.debug(f"Successfully add {len(q)} corpus")
-            return {'status': True, 'msg': f"Successfully add {len(q)} corpus"}, 200
+            q = req.texts
+            self.model.add_corpus(q, batch_size=req.batch_size, name=req.name, 
+                                  normalize_embeddings=req.normalize_embeddings)
+            msg = f"Successfully add {len(q)} texts for corpus `{req.name}`, total_size={len(self.model.corpus[req.name])}"
+            logger.debug(msg)
+            response = {'status': True, 'msg': msg}
+            return JSONResponse(response, status_code=status.HTTP_200_OK)
         except Exception as e:
             logger.error(e)
-            return {'status': False, 'msg': e}, 400
+            return JSONResponse({'status': False, 'msg': e}, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    async def encode(self, queries: Query):
+    async def encode(self, req: Query):
         '''获取query的embedding
         ## Example
         ### 入参
@@ -104,16 +128,17 @@ class EmbeddingSever:
         ```
         '''
         try:
-            q = queries.input
+            q = req.query
             embeddings = self.model.encode(q)
-            result_dict = {'result': embeddings.tolist()}
-            logger.debug(f"Successfully get sentence embeddings, q:{q}, res shape: {embeddings.shape}")
-            return result_dict
+            msg = f"Successfully get sentence embeddings, q:{q}, res shape: {embeddings.shape}"
+            logger.debug(msg)
+            result_dict = {'result': embeddings.tolist(), 'status': True, 'msg': msg}
+            return JSONResponse(result_dict, status_code=status.HTTP_200_OK)
         except Exception as e:
             logger.error(e)
-            return {'status': False, 'msg': e}, 400
+            return JSONResponse({'status': False, 'msg': e}, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    async def similarity(self, query1: Query, query2: Query, score_function:str="cos_sim"):
+    async def similarity(self, req:Similarity):
         '''计算两组texts之间的向量相似度
         ## Example:
         ### 入参
@@ -137,17 +162,17 @@ class EmbeddingSever:
         ```
         '''
         try:
-            q1 = query1.input
-            q2 = query2.input
-            sim_score = self.model.similarity(q1, q2, score_function=score_function, convert_to_numpy=True)
-            result_dict = {'result': sim_score.tolist()}
-            logger.debug(f"Successfully get similarity score, q1:{q1}, q2:{q2}, res: {sim_score}")
-            return result_dict
+            q1, q2 = req.query1, req.query2
+            sim_score = self.model.similarity(q1, q2, score_function=req.score_function, convert_to_numpy=True)
+            msg = f"Successfully get similarity score, q1:{q1}, q2:{q2}, res: {sim_score}"
+            logger.debug(msg)
+            result_dict = {'result': sim_score.tolist(), 'status': True, 'msg': msg}
+            return JSONResponse(result_dict, status_code=status.HTTP_200_OK)
         except Exception as e:
             logger.error(e)
-            return {'status': False, 'msg': e}, 400
+            return JSONResponse({'status': False, 'msg': e}, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    async def search(self, queries: Query, topk:int=10, score_function:str="cos_sim"):
+    async def search(self, req:Search):
         ''' 在候选语料中寻找和query的向量最近似的topk个结果
         ## Example:
         ### 入参
@@ -161,14 +186,15 @@ class EmbeddingSever:
 
         '''
         try:
-            q = queries.input
-            result = self.model.search(q, topk=topk, score_function=score_function)
-            result_dict = {'result': result}
-            logger.debug(f"Successfully search done, q:{q}, res size: {len(result)}")
-            return result_dict
+            q = req.query
+            result = self.model.search(q, topk=req.topk, score_function=req.score_function, name=req.name)
+            msg = f"Successfully search from {req.name} done, q:{q}, res size: {len(result)}"
+            logger.debug(msg)
+            result_dict = {'result': result, 'status': True, 'msg': msg}
+            return JSONResponse(result_dict, status_code=status.HTTP_200_OK)
         except Exception as e:
             logger.error(f"search error: {e}")
-            return {'status': False, 'msg': e}, 400
+            return JSONResponse({'status': False, 'msg': e}, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def run(self, *args, host: str = "0.0.0.0", port: int = 8001, **kwargs):
         ''' 开启server

@@ -4,7 +4,9 @@ import numpy as np
 import json
 from .base import Base
 from bert4vector.snippets import cos_sim, dot_score, semantic_search
+from bert4torch.snippets import print_table
 from pathlib import Path
+import random
 
 
 class BertVector(Base):
@@ -61,6 +63,31 @@ class BertVector(Base):
             self.corpus_embeddings[name] = []
         else:
             logger.error(f'Args `name`={name} not in {list(self.corpus.keys())}')
+
+    def summary(self, random_sample:bool=False, sample_count:int=2, verbose:int=1):
+        '''统计一个各个sub_corpus的情况'''
+        json_format, table_format = {}, []
+        for name, sub_corpus in self.corpus.items():
+            len_sub_corpus = len(sub_corpus)
+            # 抽取少量样本
+            if len_sub_corpus <= sample_count:
+                smp_sub_corpus = list(sub_corpus.values())
+            elif random_sample:
+                smp_sub_corpus = random.sample(list(sub_corpus.values()), sample_count)
+            else:
+                smp_sub_corpus = []
+                for v in sub_corpus.values():
+                    if len(smp_sub_corpus) >= sample_count:
+                        break
+                    smp_sub_corpus.append(v)
+            json_format[name] = {'size': len_sub_corpus, 'few_samples': smp_sub_corpus}
+            table_format.append({**{'name': name}, **json_format[name]})
+        
+        if verbose != 0:
+            logger.info('Corpus distribution statistics')
+            print_table(table_format)
+        return json_format
+
 
     def add_corpus(self, corpus: Union[List[str], Dict[str, str]], batch_size: int = 32,
                    normalize_embeddings: bool = True, name:str='default', **kwargs):
