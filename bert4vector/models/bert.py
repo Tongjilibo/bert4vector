@@ -4,7 +4,7 @@ import numpy as np
 import json
 from .base import Base
 from bert4vector.snippets import cos_sim, dot_score, semantic_search
-from bert4torch.snippets import print_table
+from torch4keras.snippets import print_table
 from pathlib import Path
 import random
 

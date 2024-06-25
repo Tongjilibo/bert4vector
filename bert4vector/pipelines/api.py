@@ -1,18 +1,18 @@
 '''把向量检索部署为api服务
 '''
-from typing import Optional, List, Union, Dict
+from typing import Optional, List, Union, Dict, Literal
 import json
 from loguru import logger
-from bert4vector.models import BertVector
+from bert4vector.models import BertVector, FaissVector
 from bert4vector.snippets import cos_sim
 import traceback
-from bert4torch.snippets import is_pydantic_available, is_fastapi_available
-if is_fastapi_available():
+from torch4keras.snippets import is_package_available
+if is_package_available('fastapi'):
     from fastapi import FastAPI, APIRouter, status
     from fastapi.responses import JSONResponse
     from starlette.middleware.cors import CORSMiddleware
 
-if is_pydantic_available():
+if is_package_available('pydantic'):
     from pydantic import BaseModel, Field
 else:
     BaseModel, Field = object, object
@@ -61,10 +61,17 @@ class EmbeddingSever:
     >>> server.run(port=8002)
     ```
     """
-    def __init__(self, model_name_or_path: str, debug: bool = False, **model_config):
-        logger.info("starting boot of bert server")
-        self.model = BertVector(model_name_or_path, **model_config)
-        logger.info(f'Load model success. model: {model_name_or_path}')
+    def __init__(self, 
+                 model_name_or_path: str, 
+                 mode:Literal['BertVector', 'FaissVector']='bertvector',
+                 **model_config):
+        if mode == 'BertVector':
+            self.model = BertVector(model_name_or_path, **model_config)
+        elif mode == 'FaissVector':
+            self.model = FaissVector(model_name_or_path, **model_config)
+        else:
+            raise ValueError(f'Args `{mode}` not supported')
+        logger.info(f'Load {mode} model success. model: {model_name_or_path}')
 
         # define the app
         self.app = FastAPI()
@@ -168,6 +175,10 @@ class EmbeddingSever:
         }
         ```
         '''
+        if req.name not in self.model.corpus:
+            msg = f'Args `name`: `{req.name}` not in supported list: {list(self.model.corpus.keys())}'
+            logger.warning(f"search error: {msg}")
+            return JSONResponse({'status': False, 'msg': msg}, status_code=status.HTTP_400_BAD_REQUEST)
         try:
             q = req.query
             result = self.model.search(q, topk=req.topk, score_function=req.score_function, name=req.name, **req.encode_kwargs)
@@ -198,63 +209,58 @@ class EmbeddingClientRequest:
         self.requests = requests
 
     def _post(self, endpoint: str, data: dict) -> dict:
+        url = f"{self.base_url}/{endpoint}"
         try:
-            response = self.requests.post(f"{self.base_url}/{endpoint}", json=data, timeout=self.timeout)
+            response = self.requests.post(url, json=data, timeout=self.timeout)
             response.raise_for_status()
             return response.json()
         except self.requests.exceptions.RequestException as e:
-            logger.error(f"Request failed: {traceback.format_exc()}")
+            logger.error(f"Request failed for {url}: {traceback.format_exc()}")
             return {}
 
     def _get(self, endpoint: str, params: dict) -> dict:
+        url = f"{self.base_url}/{endpoint}"
         try:
-            response = self.requests.get(f"{self.base_url}/{endpoint}", params=params, timeout=self.timeout)
+            response = self.requests.get(url, params=params, timeout=self.timeout)
             response.raise_for_status()
             return response.json()
         except self.requests.exceptions.RequestException as e:
-            logger.error(f"Request failed: {traceback.format_exc()}")
+            logger.error(f"Request failed for {url}: {traceback.format_exc()}")
             return {}
     
     def encode(self, query: Union[str, List], encode_kwargs:dict=None):
-        try:
-            data = {"query": query, 'encode_kwargs': encode_kwargs or dict()}
-            return self._post("encode", data)
-        except:
-            logger.error(f"encode error: {traceback.format_exc()}")
-            return []
+        data = {"query": query, 
+                'encode_kwargs': encode_kwargs or dict()}
+        return self._post("encode", data)
 
-    def similarity(self, query1: Union[str, List], query2: Union[str, List], score_function : str="cos_sim", encode_kwargs:dict = None):
-        try:
-            data = {"query1": query1, "query2": query2, 'score_function': 
-                    score_function, 'encode_kwargs': encode_kwargs or dict()}
-            return self._post("similarity", data)
-        except:
-            logger.error(f"similarity error: {traceback.format_exc()}")
-            return 0.0
+    def similarity(self, query1: Union[str, List], query2: Union[str, List], 
+                   score_function : str="cos_sim", encode_kwargs:dict = None):
+        data = {"query1": query1, 
+                "query2": query2, 
+                'score_function': score_function, 
+                'encode_kwargs': encode_kwargs or dict()}
+        return self._post("similarity", data)
     
     def summary(self, random_sample:bool=False, sample_count:int=2):
-        try:
-            params = {'random_sample': random_sample, 'sample_count': sample_count}
-            return self._get("summary", params)
-        except:
-            logger.error(f"summary error: {traceback.format_exc()}")
-            return []
+        params = {'random_sample': random_sample, 
+                    'sample_count': sample_count}
+        return self._get("summary", params)
 
-    def search(self, query: Union[str, List], encode_kwargs:dict = None):
-        try:
-            data = {"query": query, 'encode_kwargs': encode_kwargs or dict()}
-            return self._post("search", data)
-        except:
-            logger.error(f"search error: {traceback.format_exc()}")
-            return []
+    def search(self, query: Union[str, List], topk: int = 10,
+               score_function: str = "cos_sim", name: str = 'default',
+               encode_kwargs:dict = None):
+        data = {"query": query, 
+                'topk': topk,
+                'score_function': score_function,
+                'name': name,
+                'encode_kwargs': encode_kwargs or dict()}
+        return self._post("search", data)
     
-    def add_corpus(self, texts: Union[str, List], encode_kwargs:dict = None):
-        try:
-            data = {"texts": texts, 'encode_kwargs': encode_kwargs or dict()}
-            return self._post("add_corpus", data)
-        except:
-            logger.error(f"add_corpus error: {traceback.format_exc()}")
-            return []
+    def add_corpus(self, texts: Union[str, List], name:str='default', encode_kwargs:dict = None):
+        data = {"texts": texts, 
+                'name':name, 
+                'encode_kwargs': encode_kwargs or dict()}
+        return self._post("add_corpus", data)
 
 
 class EmbeddingClientAiohttp:
@@ -266,64 +272,59 @@ class EmbeddingClientAiohttp:
         self.aiohttp = aiohttp
 
     async def _post(self, endpoint: str, data: dict) -> dict:
+        url = f"{self.base_url}/{endpoint}"
         try:
             headers = {"Content-type": "application/json"}
             async with self.aiohttp.ClientSession(headers=headers, timeout=self.timeout) as sess:
-                async with sess.post(f"{self.base_url}/{endpoint}", data=json.dumps(data)) as resp:
+                async with sess.post(url, data=json.dumps(data)) as resp:
                     response = await resp.json()
             return response
         except:
-            logger.error(f"Request failed: {traceback.format_exc()}")
+            logger.error(f"Request failed for {url}: {traceback.format_exc()}")
             return {}
 
     async def _get(self, endpoint: str, params: dict) -> dict:
+        url = f"{self.base_url}/{endpoint}"
         try:
             headers = {"Content-type": "application/json"}
             async with self.aiohttp.ClientSession(headers=headers, timeout=self.timeout) as sess:
-                async with sess.get(f"{self.base_url}/{endpoint}", params=json.dumps(params)) as resp:
+                async with sess.get(url, params=json.dumps(params)) as resp:
                     response = await resp.json()
             return response
         except:
-            logger.error(f"Request failed: {traceback.format_exc()}")
+            logger.error(f"Request failed for {url}: {traceback.format_exc()}")
             return {}
     
     async def encode(self, query: Union[str, List], encode_kwargs:dict=None):
-        try:
-            data = {"query": query, 'encode_kwargs': encode_kwargs or dict()}
-            return await self._post("encode", data)
-        except:
-            logger.error(f"encode error: {traceback.format_exc()}")
-            return []
+        data = {"query": query, 
+                'encode_kwargs': encode_kwargs or dict()}
+        return await self._post("encode", data)
 
-    async def similarity(self, query1: Union[str, List], query2: Union[str, List], score_function : str="cos_sim", encode_kwargs:dict = None):
-        try:
-            data = {"query1": query1, "query2": query2, 'score_function': 
-                    score_function, 'encode_kwargs': encode_kwargs or dict()}
-            return await self._post("similarity", data)
-        except:
-            logger.error(f"similarity error: {traceback.format_exc()}")
-            return 0.0
+    async def similarity(self, query1: Union[str, List], query2: Union[str, List], 
+                   score_function : str="cos_sim", encode_kwargs:dict = None):
+        data = {"query1": query1, 
+                "query2": query2, 
+                'score_function': score_function, 
+                'encode_kwargs': encode_kwargs or dict()}
+        return await self._post("similarity", data)
     
     async def summary(self, random_sample:bool=False, sample_count:int=2):
-        try:
-            params = {'random_sample': random_sample, 'sample_count': sample_count}
-            return await self._get("summary", params)
-        except:
-            logger.error(f"summary error: {traceback.format_exc()}")
-            return []
+        params = {'random_sample': random_sample, 
+                    'sample_count': sample_count}
+        return await self._get("summary", params)
 
-    async def search(self, query: Union[str, List], encode_kwargs:dict = None):
-        try:
-            data = {"query": query, 'encode_kwargs': encode_kwargs or dict()}
-            return await self._post("search", data)
-        except:
-            logger.error(f"search error: {traceback.format_exc()}")
-            return []
+    async def search(self, query: Union[str, List], topk: int = 10,
+               score_function: str = "cos_sim", name: str = 'default',
+               encode_kwargs:dict = None):
+        data = {"query": query, 
+                'topk': topk,
+                'score_function': score_function,
+                'name': name,
+                'encode_kwargs': encode_kwargs or dict()}
+        return await self._post("search", data)
     
-    async def add_corpus(self, texts: Union[str, List], encode_kwargs:dict = None):
-        try:
-            data = {"texts": texts, 'encode_kwargs': encode_kwargs or dict()}
-            return await self._post("add_corpus", data)
-        except:
-            logger.error(f"add_corpus error: {traceback.format_exc()}")
-            return []
+    async def add_corpus(self, texts: Union[str, List], name:str='default', encode_kwargs:dict = None):
+        data = {"texts": texts, 
+                'name':name, 
+                'encode_kwargs': encode_kwargs or dict()}
+        return await self._post("add_corpus", data)
