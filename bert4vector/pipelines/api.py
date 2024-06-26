@@ -63,7 +63,7 @@ class EmbeddingSever:
     """
     def __init__(self, 
                  model_name_or_path: str, 
-                 mode:Literal['BertVector', 'FaissVector']='bertvector',
+                 mode:Literal['BertVector', 'FaissVector']='BertVector',
                  **model_config):
         if mode == 'BertVector':
             self.model = BertVector(model_name_or_path, **model_config)

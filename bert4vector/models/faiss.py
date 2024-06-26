@@ -32,7 +32,7 @@ class FaissVector(BertVector):
         super().reset()
         self.indexes = dict()
     
-    def add_corpus(self, corpus: Union[List[str], Dict[str, str]], batch_size: int = 32,
+    def add_corpus(self, corpus: List[str], batch_size: int = 32,
                    normalize_embeddings: bool = True, name:str='default', 
                    ann_search:bool=False, gpu_index:bool=False,
                    gpu_memory:int=16, n_search:int=64, **kwargs):

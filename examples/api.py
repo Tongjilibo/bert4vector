@@ -5,7 +5,7 @@ from bert4vector.pipelines import EmbeddingSever, EmbeddingClientRequest, Embedd
 
 def start_server(port):
     # server端
-    server = EmbeddingSever('/data/pretrain_ckpt/simbert/sushen@simbert_chinese_tiny')
+    server = EmbeddingSever('/data/pretrain_ckpt/embedding/BAAI--bge-base-zh-v1.5')
     server.run(port=port)
 
 def start_client_request(port):

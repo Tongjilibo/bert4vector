@@ -17,7 +17,7 @@ class BertVector(Base):
     :param device: Device (like 'cuda' / 'cpu') to use for the computation.
     """
     def __init__(self, model_name_or_path:str, model_type:Literal['bert4torch', 'sentence_transformers']='bert4torch', 
-                 corpus: Union[List[str], Dict[str, str]] = None, **model_config):
+                 corpus: List[str] = None, **model_config):
         self.model_type = model_type
         self.model = self.build_model(model_name_or_path, **model_config)
         self.score_functions = {'cos_sim': cos_sim, 'dot': dot_score}
@@ -147,7 +147,7 @@ class BertVector(Base):
             print_table(table_format)
         return json_format
 
-    def add_corpus(self, corpus: Union[List[str], Dict[str, str]], name:str='default', **encode_kwargs):
+    def add_corpus(self, corpus: List[str], name:str='default', **encode_kwargs):
         """ 使用文档chunk来转为向量
         :param corpus: 语料的list
         :param name: sub_corpus名
@@ -156,30 +156,30 @@ class BertVector(Base):
         :param batch_size: batch size for computing embeddings
         :param normalize_embeddings: normalize embeddings before computing similarity
         """
-        new_corpus = {}
+        new_corpus, new_corpus_set = {}, set()
         if name not in self.corpus:
             self.corpus[name] = {}
             self.corpus_embeddings[name] = []
         
+        # 添加text到语料库
         id = len(self.corpus[name])
+        sub_corpus_values = set(self.corpus[name].values())
         for doc in corpus:
-            if isinstance(corpus, list):
-                if doc not in self.corpus[name].values():
-                    new_corpus[id] = doc
-                    id += 1
-            else:
-                if doc not in self.corpus[name].values():
-                    new_corpus[id] = doc
-                    id += 1
-        self.corpus[name].update(new_corpus)
-        logger.info(f"Start computing corpus embeddings, new docs: {len(new_corpus)}")
+            if (doc in sub_corpus_values) or (doc in new_corpus_set):
+                continue
+            new_corpus[id] = doc
+            new_corpus_set.add(doc)
+            id += 1
 
+        self.corpus[name].update(new_corpus)
+        del new_corpus_set
+
+        # 转向量并放到向量库
         corpus_embeddings = self.encode(
             list(new_corpus.values()),
             show_progress_bar=True,
             **encode_kwargs
         ).tolist()
-
         self.corpus_embeddings[name] = self.corpus_embeddings[name] + corpus_embeddings
         logger.info(f"Add {len(new_corpus)} docs for `{name}`, total: {len(self.corpus[name])}, emb len: {len(self.corpus_embeddings[name])}")
     

@@ -10,7 +10,7 @@ class Base:
     to individual corpus documents.
     """
 
-    def add_corpus(self, corpus: Union[List[str], Dict[str, str]]):
+    def add_corpus(self, corpus: List[str]):
         """
         Extend the corpus with new documents.
 
