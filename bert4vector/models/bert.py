@@ -181,7 +181,10 @@ class BertVector(Base):
             **encode_kwargs
         ).tolist()
         self.corpus_embeddings[name] = self.corpus_embeddings[name] + corpus_embeddings
-        logger.info(f"Add {len(new_corpus)} docs for `{name}`, total: {len(self.corpus[name])}, emb len: {len(self.corpus_embeddings[name])}")
+        msg = f"Add {len(new_corpus)} docs for `{name}`, total: {len(self.corpus[name])}"
+        if len(self.corpus_embeddings[name]) > 0:
+            msg += f", emb dim: {len(self.corpus_embeddings[name][0])}"
+        logger.info(msg)
     
     def search(self, queries: Union[str, List[str]], topk:int=10, score_function:str="cos_sim", name:str='default', **encode_kwargs):
         """ 在候选语料中寻找和query的向量最近似的topk个结果
@@ -229,7 +232,7 @@ class BertVector(Base):
         '''同时保存语料和embedding'''
         self._save_corpus(corpus_path)
         self._save_embeddings(emb_path)
-    
+
     def load(self, corpus_path:Path=None, emb_path:Path=None):
         '''同时加载语料和embedding'''
         self._load_corpus(corpus_path)
@@ -251,16 +254,19 @@ class BertVector(Base):
         corpus_path = "corpus.json" if corpus_path is None else corpus_path
         with open(corpus_path, 'w', encoding='utf-8') as f:
             json.dump(self.corpus, f, ensure_ascii=False, indent=4)
-    
+        logger.info(f'Successfully save corpus: {corpus_path}')
+
     def _load_corpus(self, corpus_path:Path=None):
         '''从文件加载语料'''
         corpus_path = "corpus.json" if corpus_path is None else corpus_path
         with open(corpus_path, 'r', encoding='utf-8') as f:
             self.corpus = json.load(f)
+        # 修改id的type为int
         for name, sub_corpus in self.corpus.items():
             ids = list(sub_corpus.keys())
             for id in ids:
                 sub_corpus[int(id)] = sub_corpus.pop(id)
+        logger.info(f'Successfully load corpus: {corpus_path}')
 
     def _save_embeddings(self, emb_path:Path=None):
         """ 把语料向量保存到json文件中
@@ -274,24 +280,22 @@ class BertVector(Base):
                                 zip(sub_corpus.keys(), self.corpus_embeddings[name])}
         with open(emb_path, "w", encoding="utf-8") as f:
             json.dump(corpus_emb, f, ensure_ascii=False)
-        logger.debug(f"Save corpus embeddings to file: {emb_path}.")
+        logger.info(f'Successfully save embeddings: {emb_path}')
 
     def _load_embeddings(self, emb_path:Path=None):
         """ 从json文件中加载语料向量
         :param emb_path: json file path
         :return: list of corpus embeddings, dict of corpus ids map, dict of corpus
         """
-        try:
-            emb_path = "corpus_emb.json" if emb_path is None else emb_path
-            with open(emb_path, "r", encoding="utf-8") as f:
-                corpus_emb = json.load(f)
-            corpus_embeddings = dict()
-            for name, sub_corpus_emb in corpus_emb.items():
-                sub_corpus_embeddings = []
-                for id, corpus_dict in sub_corpus_emb.items():
-                    self.corpus[int(id)] = corpus_dict["doc"]
-                    sub_corpus_embeddings.append(corpus_dict["doc_emb"])
-                corpus_embeddings[name] = sub_corpus_embeddings
-            self.corpus_embeddings = corpus_embeddings
-        except (IOError, json.JSONDecodeError):
-            logger.error("Error: Could not load corpus embeddings from file.")
+        emb_path = "corpus_emb.json" if emb_path is None else emb_path
+        with open(emb_path, "r", encoding="utf-8") as f:
+            corpus_emb = json.load(f)
+        corpus_embeddings = dict()
+        for name, sub_corpus_emb in corpus_emb.items():
+            sub_corpus_embeddings = []
+            for id, corpus_dict in sub_corpus_emb.items():
+                self.corpus[int(id)] = corpus_dict["doc"]
+                sub_corpus_embeddings.append(corpus_dict["doc_emb"])
+            corpus_embeddings[name] = sub_corpus_embeddings
+        self.corpus_embeddings = corpus_embeddings
+        logger.info(f'Successfully load embeddings: {emb_path}')

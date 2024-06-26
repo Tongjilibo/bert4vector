@@ -76,7 +76,8 @@ class FaissVector(BertVector):
         emb_path = "faiss_emb.index" if emb_path is None else emb_path
         for name, index in self.indexes.items():
             faiss.write_index(index, emb_path + '.' + name)
-    
+        logger.info(f'Successfully save embeddings: {emb_path}')
+
     def _load_embeddings(self, emb_path:str=None):
         '''从本地加载corpus_embeddings'''
         emb_path = "faiss_emb.index" if emb_path is None else emb_path
@@ -86,7 +87,8 @@ class FaissVector(BertVector):
             if file+'.' in file_name:
                 name = file_name.replace(file+'.', '')
                 self.indexes[name] = faiss.read_index(os.path.join(path, file_name))
-    
+        logger.info(f'Successfully load embeddings: {emb_path}.*')
+
     def search(self, queries: Union[str, List[str]], topk:int=10, name:str='default', **kwargs) -> dict:
         ''' 在候选语料中寻找和query的向量最近似的topk个结果
         :param queries: query语句/语句列表/语句字典

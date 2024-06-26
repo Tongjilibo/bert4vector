@@ -51,7 +51,6 @@ class EmbeddingSever:
     :param num_results: int, number of results to return
     :param threshold: float, threshold to return results
     :param device: pytorch device, e.g. 'cuda:0'
-    :param debug: whether to print debug info, default False
     :return: None, start the server
 
     Example:
@@ -105,10 +104,10 @@ class EmbeddingSever:
         ```
         '''
         try:
-            q = req.query
-            embeddings = self.model.encode(q, **req.encode_kwargs)
-            msg = f"Successfully get sentence embeddings, q:{q}, res shape: {embeddings.shape}"
-            logger.debug(msg)
+            query = req.query
+            embeddings = self.model.encode(query, **req.encode_kwargs)
+            msg = f"Successfully get sentence embeddings, query:{query}, res shape: {embeddings.shape}"
+            logger.info(msg)
             result_dict = {'result': embeddings.tolist(), 'status': True, 'msg': msg}
             return JSONResponse(result_dict, status_code=status.HTTP_200_OK)
         except:
@@ -132,7 +131,7 @@ class EmbeddingSever:
             req.encode_kwargs['convert_to_numpy'] = True
             sim_score = self.model.similarity(q1, q2, score_function=req.score_function, **req.encode_kwargs)
             msg = f"Successfully get similarity score, q1:{q1}, q2:{q2}, res: {sim_score}"
-            logger.debug(msg)
+            logger.info(msg)
             result_dict = {'result': sim_score.tolist(), 'status': True, 'msg': msg}
             return JSONResponse(result_dict, status_code=status.HTTP_200_OK)
         except:
@@ -157,7 +156,7 @@ class EmbeddingSever:
             q = req.texts
             self.model.add_corpus(q, name=req.name, **req.encode_kwargs)
             msg = f"Successfully add {len(q)} texts for corpus `{req.name}` and size={len(self.model.corpus[req.name])}, all corpus size={len(self.model)}"
-            logger.debug(msg)
+            logger.info(msg)
             response = {'status': True, 'msg': msg}
             return JSONResponse(response, status_code=status.HTTP_200_OK)
         except:
@@ -180,10 +179,10 @@ class EmbeddingSever:
             logger.warning(f"search error: {msg}")
             return JSONResponse({'status': False, 'msg': msg}, status_code=status.HTTP_400_BAD_REQUEST)
         try:
-            q = req.query
-            result = self.model.search(q, topk=req.topk, score_function=req.score_function, name=req.name, **req.encode_kwargs)
-            msg = f"Successfully search from {req.name} done, q:{q}, res size: {len(result)}"
-            logger.debug(msg)
+            query = req.query
+            result = self.model.search(query, topk=req.topk, score_function=req.score_function, name=req.name, **req.encode_kwargs)
+            msg = f"Successfully search from {req.name} done, query:{query}, res size: {len(result)}"
+            logger.info(msg)
             result_dict = {'result': result, 'status': True, 'msg': msg}
             return JSONResponse(result_dict, status_code=status.HTTP_200_OK)
         except:
