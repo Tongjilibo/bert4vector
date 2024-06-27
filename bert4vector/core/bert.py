@@ -2,12 +2,12 @@ from loguru import logger
 from typing import List, Union, Dict, Literal
 import numpy as np
 import json
-from .base import Base
+from .base import SimilarityBase
 from bert4vector.snippets import cos_sim, dot_score, semantic_search
 from pathlib import Path
 
 
-class BertSimilarity(Base):
+class BertSimilarity(SimilarityBase):
     """ 在内存中存储和检索向量
     :param checkpoint_path: 模型权重地址
     :param config_path: 权重的config地址
@@ -15,13 +15,11 @@ class BertSimilarity(Base):
     :param device: Device (like 'cuda' / 'cpu') to use for the computation.
     """
     def __init__(self, model_name_or_path:str, model_type:Literal['bert4torch', 'sentence_transformers']='bert4torch', 
-                 corpus: List[str] = None, **model_config):
-        super().__init__(matching_type='BertSimilarity')
+                 corpus: List[str] = None, matching_type:str='BertSimilarity', **model_config):
         self.model_type = model_type
         self.model = self.build_model(model_name_or_path, **model_config)
         self.score_functions = {'cos_sim': cos_sim, 'dot': dot_score}
-        if corpus is not None:
-            self.add_corpus(corpus)
+        super().__init__(corpus=corpus, matching_type=matching_type)
 
     def build_model(self, model_name_or_path, **model_config):
         '''初始化模型'''
@@ -97,17 +95,13 @@ class BertSimilarity(Base):
         """计算两组texts之间的cos距离"""
         return 1 - self.similarity(a, b)
 
-    def add_corpus(self, corpus: List[str], name:str='default', **encode_kwargs):
+    def _add_embedding(self, new_corpus: Dict[int, str], name:str='default', **encode_kwargs):
         """ 使用文档chunk来转为向量
-        :param corpus: 语料的list
-        :param name: sub_corpus名
 
         >>> encode_kwargs参数
         :param batch_size: batch size for computing embeddings
         :param normalize_embeddings: normalize embeddings before computing similarity
         """
-        new_corpus = super().add_corpus(corpus=corpus, name=name)
-
         # 转向量并放到向量库
         corpus_embeddings = self.encode(
             list(new_corpus.values()),
@@ -115,12 +109,8 @@ class BertSimilarity(Base):
             **encode_kwargs
         ).tolist()
         self.corpus_embeddings[name] = self.corpus_embeddings[name] + corpus_embeddings
-        msg = f"Add {len(new_corpus)} docs for `{name}`, total: {len(self.corpus[name])}"
-        if len(self.corpus_embeddings[name]) > 0:
-            msg += f", emb dim: {len(self.corpus_embeddings[name][0])}"
-        logger.info(msg)
     
-    def search(self, queries: Union[str, List[str]], topk:int=10, score_function:str="cos_sim", name:str='default', **encode_kwargs):
+    def search(self, queries: Union[str, List[str]], topk:int=10, score_function:str="cos_sim", name:str='default', **encode_kwargs) -> Dict[str, List]:
         """ 在候选语料中寻找和query的向量最近似的topk个结果
         :param queries:str or list of str
         :param topk: int

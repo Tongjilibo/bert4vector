@@ -3,7 +3,7 @@
 from typing import Optional, List, Union, Dict, Literal
 import json
 from loguru import logger
-from bert4vector.core import BertSimilarity, FaissSimilarity
+from bert4vector.core import BertSimilarity, FaissSimilarity, LongestCommonSubstringSimilarity
 from bert4vector.snippets import cos_sim
 import traceback
 from torch4keras.snippets import is_package_available
@@ -61,13 +61,15 @@ class SimilaritySever:
     ```
     """
     def __init__(self, 
-                 model_name_or_path: str, 
-                 mode:Literal['BertVector', 'FaissVector']='BertVector',
+                 mode:Literal['BertVector', 'FaissVector', 'LongestCommonSubstringSimilarity']='BertVector',
+                 model_name_or_path: str=None, 
                  **model_config):
         if mode == 'BertVector':
             self.model = BertSimilarity(model_name_or_path, **model_config)
         elif mode == 'FaissVector':
             self.model = FaissSimilarity(model_name_or_path, **model_config)
+        elif mode == 'LongestCommonSubstringSimilarity':
+            self.model = LongestCommonSubstringSimilarity()
         else:
             raise ValueError(f'Args `{mode}` not supported')
         logger.info(f'Load {mode} model success. model: {model_name_or_path}')

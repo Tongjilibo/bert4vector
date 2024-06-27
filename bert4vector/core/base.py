@@ -4,9 +4,10 @@ from pathlib import Path
 from loguru import logger
 from torch4keras.snippets import print_table
 import random
+from tqdm import tqdm
 
 
-class Base:
+class SimilarityBase:
     """基类
     """
     def __init__(self, corpus: List[str] = None, matching_type:str='Base') -> None:
@@ -39,6 +40,10 @@ class Base:
         else:
             logger.error(f'Args `name`={name} not in {list(self.corpus.keys())}')
 
+    def encode(self, sentences:Union[str, List], **kwargs):
+        '''sentences转为编码, 这里默认不做任何处理'''
+        return sentences
+
     def summary(self, random_sample:bool=False, sample_count:int=2, verbose:int=1):
         '''统计一个各个sub_corpus的情况'''
         json_format, table_format = {}, []
@@ -63,7 +68,7 @@ class Base:
             print_table(table_format)
         return json_format
     
-    def add_corpus(self, corpus: List[str], name:str='default'):
+    def add_corpus(self, corpus: List[str], name:str='default', **kwargs):
         """ 使用文档chunk来转为向量
         :param corpus: 语料的list
         :param name: sub_corpus名
@@ -85,7 +90,31 @@ class Base:
 
         self.corpus[name].update(new_corpus)
         del new_corpus_set
-        return new_corpus
+        
+        # 转向量并放到向量库
+        self._add_embedding(new_corpus=new_corpus, name=name, **kwargs)
+        msg = f"Add {len(new_corpus)} docs for `{name}`, total: {len(self.corpus[name])}"
+        if len(self.corpus_embeddings[name]) > 0:
+            msg += f", emb dim: {len(self.corpus_embeddings[name][0])}"
+        logger.info(msg)
+
+    def _add_embedding(self, new_corpus:Dict[int, str], name:str='default', **kwargs):
+        '''转向量并放到向量库
+        :param corpus: 语料的list
+        :param name: sub_corpus名
+        '''
+        """
+        Extend the corpus with new documents.
+
+        Parameters
+        ----------
+        corpus : list of str or dict of str
+        """
+        # 转向量并放到向量库
+        corpus_embeddings = []
+        for sentence in tqdm(list(new_corpus.values()), desc="Encoding"):
+            corpus_embeddings.append(self.encode(sentence))
+        self.corpus_embeddings[name] = self.corpus_embeddings[name] + corpus_embeddings
 
     def similarity(self, a: Union[str, List[str]], b: Union[str, List[str]]):
         """
@@ -119,10 +148,10 @@ class Base:
         self._load_corpus(corpus_path)
         self._load_embeddings(emb_path)
     
-    def _save_embeddings(index_path):
+    def _save_embeddings(emb_path):
         pass
 
-    def _load_embeddings(index_path):
+    def _load_embeddings(emb_path):
         pass
 
     def _save_corpus(self, corpus_path:Path=None):
