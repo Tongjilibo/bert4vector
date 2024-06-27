@@ -4,12 +4,10 @@ import numpy as np
 import json
 from .base import Base
 from bert4vector.snippets import cos_sim, dot_score, semantic_search
-from torch4keras.snippets import print_table
 from pathlib import Path
-import random
 
 
-class BertVector(Base):
+class BertSimilarity(Base):
     """ 在内存中存储和检索向量
     :param checkpoint_path: 模型权重地址
     :param config_path: 权重的config地址
@@ -18,11 +16,10 @@ class BertVector(Base):
     """
     def __init__(self, model_name_or_path:str, model_type:Literal['bert4torch', 'sentence_transformers']='bert4torch', 
                  corpus: List[str] = None, **model_config):
+        super().__init__(matching_type='BertSimilarity')
         self.model_type = model_type
         self.model = self.build_model(model_name_or_path, **model_config)
         self.score_functions = {'cos_sim': cos_sim, 'dot': dot_score}
-        self.corpus = {}
-        self.corpus_embeddings = {}
         if corpus is not None:
             self.add_corpus(corpus)
 
@@ -36,18 +33,6 @@ class BertVector(Base):
             return SentenceTransformer(model_name_or_path, **model_config)
         else:
             raise ValueError(f'Args `model_type` {self.model_type} not supported')
-        
-    def __len__(self):
-        """Get length of corpus."""
-        return sum([len(i) for i in self.corpus.values()])
-
-    def __str__(self):
-        base = f"Similarity: {self.__class__.__name__}, matching_model: {self.model}"
-        if self.corpus:
-            for k, v in self.corpus.items():
-                base += f", sub_corpus={k}, data_size={len(v)}"  
-            base += f", total size: {len(self)}"
-        return base
     
     def to(self, device):
         self.model.to(device)
@@ -112,41 +97,6 @@ class BertVector(Base):
         """计算两组texts之间的cos距离"""
         return 1 - self.similarity(a, b)
 
-    def reset(self, name:str=None):
-        '''重置向量库'''
-        if name is None:
-            self.corpus = {}
-            self.corpus_embeddings = {}
-        elif name in self.corpus:
-            self.corpus[name] = {}
-            self.corpus_embeddings[name] = []
-        else:
-            logger.error(f'Args `name`={name} not in {list(self.corpus.keys())}')
-
-    def summary(self, random_sample:bool=False, sample_count:int=2, verbose:int=1):
-        '''统计一个各个sub_corpus的情况'''
-        json_format, table_format = {}, []
-        for name, sub_corpus in self.corpus.items():
-            len_sub_corpus = len(sub_corpus)
-            # 抽取少量样本
-            if len_sub_corpus <= sample_count:
-                smp_sub_corpus = list(sub_corpus.values())
-            elif random_sample:
-                smp_sub_corpus = random.sample(list(sub_corpus.values()), sample_count)
-            else:
-                smp_sub_corpus = []
-                for v in sub_corpus.values():
-                    if len(smp_sub_corpus) >= sample_count:
-                        break
-                    smp_sub_corpus.append(v)
-            json_format[name] = {'size': len_sub_corpus, 'few_samples': smp_sub_corpus}
-            table_format.append({**{'name': name}, **json_format[name]})
-        
-        if verbose != 0:
-            logger.info('Corpus distribution statistics')
-            print_table(table_format)
-        return json_format
-
     def add_corpus(self, corpus: List[str], name:str='default', **encode_kwargs):
         """ 使用文档chunk来转为向量
         :param corpus: 语料的list
@@ -156,23 +106,7 @@ class BertVector(Base):
         :param batch_size: batch size for computing embeddings
         :param normalize_embeddings: normalize embeddings before computing similarity
         """
-        new_corpus, new_corpus_set = {}, set()
-        if name not in self.corpus:
-            self.corpus[name] = {}
-            self.corpus_embeddings[name] = []
-        
-        # 添加text到语料库
-        id = len(self.corpus[name])
-        sub_corpus_values = set(self.corpus[name].values())
-        for doc in corpus:
-            if (doc in sub_corpus_values) or (doc in new_corpus_set):
-                continue
-            new_corpus[id] = doc
-            new_corpus_set.add(doc)
-            id += 1
-
-        self.corpus[name].update(new_corpus)
-        del new_corpus_set
+        new_corpus = super().add_corpus(corpus=corpus, name=name)
 
         # 转向量并放到向量库
         corpus_embeddings = self.encode(
@@ -210,7 +144,7 @@ class BertVector(Base):
 
         """
 
-        queries, queries_embeddings, queries_ids_map = self._get_query_emb(queries, **encode_kwargs)
+        queries, queries_embeddings = self._get_query_emb(queries, **encode_kwargs)
         if score_function not in self.score_functions:
             raise ValueError(f"score function: {score_function} must be either (cos_sim) for cosine similarity"
                              " or (dot) for dot product")
@@ -224,49 +158,15 @@ class BertVector(Base):
             for hit in hits[0:topk]:
                 corpus_id = hit['corpus_id']
                 items.append({**{'text': self.corpus[name][corpus_id]}, **hit})
-            result[queries[queries_ids_map[idx]]] = items
-
+            result[queries[idx]] = items
         return result
-
-    def save(self, corpus_path:Path=None, emb_path:Path=None):
-        '''同时保存语料和embedding'''
-        self._save_corpus(corpus_path)
-        self._save_embeddings(emb_path)
-
-    def load(self, corpus_path:Path=None, emb_path:Path=None):
-        '''同时加载语料和embedding'''
-        self._load_corpus(corpus_path)
-        self._load_embeddings(emb_path)
     
     def _get_query_emb(self, queries:Union[str, List[str]], **encode_kwargs):
         '''获取query的句向量'''
         if isinstance(queries, str) or not hasattr(queries, '__len__'):
             queries = [queries]
-        if isinstance(queries, list):
-            queries = {id: query for id, query in enumerate(queries)}
-        queries_ids_map = {i: id for i, id in enumerate(list(queries.keys()))}
-        queries_texts = list(queries.values())
-        queries_embeddings = self.encode(queries_texts, convert_to_tensor=True, **encode_kwargs)
-        return queries, queries_embeddings, queries_ids_map
-
-    def _save_corpus(self, corpus_path:Path=None):
-        '''保存语料到文件'''
-        corpus_path = "corpus.json" if corpus_path is None else corpus_path
-        with open(corpus_path, 'w', encoding='utf-8') as f:
-            json.dump(self.corpus, f, ensure_ascii=False, indent=4)
-        logger.info(f'Successfully save corpus: {corpus_path}')
-
-    def _load_corpus(self, corpus_path:Path=None):
-        '''从文件加载语料'''
-        corpus_path = "corpus.json" if corpus_path is None else corpus_path
-        with open(corpus_path, 'r', encoding='utf-8') as f:
-            self.corpus = json.load(f)
-        # 修改id的type为int
-        for name, sub_corpus in self.corpus.items():
-            ids = list(sub_corpus.keys())
-            for id in ids:
-                sub_corpus[int(id)] = sub_corpus.pop(id)
-        logger.info(f'Successfully load corpus: {corpus_path}')
+        queries_embeddings = self.encode(queries, convert_to_tensor=True, **encode_kwargs)
+        return queries, queries_embeddings
 
     def _save_embeddings(self, emb_path:Path=None):
         """ 把语料向量保存到json文件中

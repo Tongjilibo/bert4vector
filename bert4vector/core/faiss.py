@@ -1,5 +1,5 @@
 from typing import Dict, List, Union
-from .bert import BertVector
+from .bert import BertSimilarity
 import importlib
 import math
 import numpy as np
@@ -10,12 +10,12 @@ import os
 if importlib.util.find_spec('faiss') is not None:
     import faiss
 
-class FaissVector(BertVector):
+class FaissSimilarity(BertSimilarity):
     ''' 用faiss来存储和检索向量
     Example:
     ```python
-    >>> from bert4vector import FaissVector
-    >>> model = FaissVector('E:/pretrain_ckpt/simbert/sushen@simbert_chinese_tiny')
+    >>> from bert4vector import FaissSimilarity
+    >>> model = FaissSimilarity('E:/pretrain_ckpt/simbert/sushen@simbert_chinese_tiny')
     >>> model.add_corpus(['你好', '我选你'], gpu_index=True)
     >>> model.add_corpus(['天气不错', '人很好看'], gpu_index=True)
     >>> print(model.search('你好'))
@@ -46,7 +46,8 @@ class FaissVector(BertVector):
         :param gpu_memory: gpu的显存设置
         :param n_search: IndexIVFFlat 的 nprobe 属性默认为1, 在nprobe个最近邻的簇向量空间中进行 k 近邻搜索
         '''
-        super().add_corpus(corpus, batch_size, normalize_embeddings, name=name, **kwargs)
+        super().add_corpus(corpus, batch_size=batch_size, normalize_embeddings=normalize_embeddings, 
+                           name=name, **kwargs)
         d = len(self.corpus_embeddings[name][0])
         nlist = int(math.sqrt(len(self.corpus_embeddings[name])))
         quantizer = faiss.IndexFlatIP(d)
@@ -97,8 +98,8 @@ class FaissVector(BertVector):
 
         Example:
         ```python
-        >>> from bert4vector import FaissVector
-        >>> model = FaissVector('/data/pretrain_ckpt/simbert/sushen@simbert_chinese_tiny')
+        >>> from bert4vector import FaissSimilarity
+        >>> model = FaissSimilarity('/data/pretrain_ckpt/simbert/sushen@simbert_chinese_tiny')
         >>> model.add_corpus(['你好', '我选你'], gpu_index=True)
         >>> model.add_corpus(['天气不错', '人很好看'], gpu_index=True)
         >>> print(model.search('你好', topk=2))
@@ -107,15 +108,15 @@ class FaissVector(BertVector):
         >>> # {'你好': [{'corpus_id': 0, 'score': 1.406428, 'text': '你好'},
         ... #           {'corpus_id': 3, 'score': 0.800828, 'text': '人很好看'}]} 
         '''
-        queries, queries_embeddings, queries_ids_map = super()._get_query_emb(queries, **kwargs)
+        queries, queries_embeddings = super()._get_query_emb(queries, **kwargs)
         distance, idx = self.indexes[name].search(np.array(queries_embeddings.cpu(), dtype=np.float32), topk)
         
         results = {}
-        for id_, (i, s) in enumerate(zip(idx, distance)):
+        for idx, (i, s) in enumerate(zip(idx, distance)):
             items = []
             for j, k in zip(i, s):
                 if j < 0:
                     continue
                 items.append({'text': self.corpus[name][j], 'corpus_id': j, 'score': k})
-            results[queries[queries_ids_map[id_]]] = items
+            results[queries[idx]] = items
         return results

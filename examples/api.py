@@ -1,16 +1,16 @@
 ''' 生成api server的示例代码
 '''
-from bert4vector.pipelines import EmbeddingSever, EmbeddingClientRequest, EmbeddingClientAiohttp
+from bert4vector.pipelines import SimilaritySever, SimilarityClientRequest, SimilarityClientAiohttp
 
 
 def start_server(port):
     # server端
-    server = EmbeddingSever('/data/pretrain_ckpt/embedding/BAAI--bge-base-zh-v1.5')
+    server = SimilaritySever('/data/pretrain_ckpt/embedding/BAAI--bge-base-zh-v1.5')
     server.run(port=port)
 
 def start_client_request(port):
     # client端
-    client = EmbeddingClientRequest(base_url=f'http://0.0.0.0:{port}')
+    client = SimilarityClientRequest(base_url=f'http://0.0.0.0:{port}')
     print(client.add_corpus(['你好', '天气不错']))
     print(client.encode('你好'))
     print(client.similarity(query1='你好', query2='你好啊'))
@@ -19,7 +19,7 @@ def start_client_request(port):
 
 async def start_client_aiohttp(port):
     # client端
-    client = EmbeddingClientAiohttp(base_url=f'http://0.0.0.0:{port}')
+    client = SimilarityClientAiohttp(base_url=f'http://0.0.0.0:{port}')
     print(await client.add_corpus(['你好', '天气不错']))
     print(await client.encode('你好'))
     print(await client.similarity(query1='你好', query2='你好啊'))

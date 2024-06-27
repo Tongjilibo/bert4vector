@@ -112,14 +112,14 @@ def is_str_match(str1, str2, threshold=1.0):
         return (1.0 - edit_distance(str1, str2)) >= threshold
 
 
-def longest_match_size(str1, str2):
+def longest_common_substring_size(str1, str2):
     """最长公共子串长度"""
     sq = SequenceMatcher(None, str1, str2)
     match = sq.find_longest_match(0, len(str1), 0, len(str2))
     return match.size
 
 
-def longest_match_ratio(str1, str2):
+def longest_common_substring_ratio(str1, str2):
     """最长公共子串占比"""
     sq = SequenceMatcher(None, str1, str2)
     match = sq.find_longest_match(0, len(str1), 0, len(str2))
@@ -222,5 +222,5 @@ if __name__ == '__main__':
     str1 = '刘若英是演员和歌手'
     str2 = '刘若英是演员吗？'
     print(f"{str1} vs {str2} common sub str: {num_of_common_sub_str(str1, str2)}")
-    print(f"{str1} vs {str2} longest match size: {longest_match_size(str1, str2)}")
-    print(f"{str1} vs {str2} longest match ratio: {longest_match_ratio(str1, str2)}")
+    print(f"{str1} vs {str2} longest match size: {longest_common_substring_size(str1, str2)}")
+    print(f"{str1} vs {str2} longest match ratio: {longest_common_substring_ratio(str1, str2)}")

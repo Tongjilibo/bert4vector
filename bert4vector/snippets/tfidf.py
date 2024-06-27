@@ -7,7 +7,7 @@
 import os
 
 pwd_path = os.path.abspath(os.path.dirname(__file__))
-default_stopwords_file = os.path.join(pwd_path, '../data/stopwords.txt')
+default_stopwords_file = os.path.join(pwd_path, '../config/stopwords.txt')
 
 
 def load_stopwords(file_path):
