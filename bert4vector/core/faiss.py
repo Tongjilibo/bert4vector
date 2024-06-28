@@ -26,6 +26,7 @@ class FaissSimilarity(BertSimilarity):
         self.indexes = dict()
         super().__init__(*args, **kwargs)
         assert hasattr(faiss, "IndexFlatIP")
+        self.emb_path = "faiss_emb.index"
 
     def reset(self):
         '''重置向量库'''
@@ -72,21 +73,19 @@ class FaissSimilarity(BertSimilarity):
     
     def _save_embeddings(self, emb_path:str=None):
         '''把corpus_embeddings保存到本地'''
-        emb_path = "faiss_emb.index" if emb_path is None else emb_path
+        emb_path = self.emb_path if emb_path is None else emb_path
         for name, index in self.indexes.items():
             faiss.write_index(index, emb_path + '.' + name)
-        logger.info(f'Successfully save embeddings: {emb_path}')
 
     def _load_embeddings(self, emb_path:str=None):
         '''从本地加载corpus_embeddings'''
-        emb_path = "faiss_emb.index" if emb_path is None else emb_path
+        emb_path = self.emb_path if emb_path is None else emb_path
         path = os.path.dirname(emb_path)
         file = os.path.basename(emb_path)
         for file_name in os.listdir(path):
-            if file+'.' in file_name:
-                name = file_name.replace(file+'.', '')
+            if file + '.' in file_name:
+                name = file_name.replace(file + '.', '')
                 self.indexes[name] = faiss.read_index(os.path.join(path, file_name))
-        logger.info(f'Successfully load embeddings: {emb_path}.*')
 
     def search(self, queries: Union[str, List[str]], topk:int=10, name:str='default', **kwargs) -> dict:
         ''' 在候选语料中寻找和query的向量最近似的topk个结果

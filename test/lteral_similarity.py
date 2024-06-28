@@ -1,7 +1,7 @@
 '''字面的相似度test
 '''
 from bert4vector.core import SameCharsSimilarity, LongestCommonSubstringSimilarity, SimilarityBase
-from bert4vector.core import HownetSimilarity, SimHashSimilarity
+from bert4vector.core import HownetSimilarity, SimHashSimilarity,TfidfSimilarity
 import pytest
 
 
@@ -22,11 +22,11 @@ def literal_similarity(text2vecClass:SimilarityBase):
 
     text2vec.add_corpus(['你好', '我选你'])
     text2vec.add_corpus(['天气不错', '人很好看'])
-    # text2vec.save(corpus_path='./corpus.json', emb_path='./emb.index')
-    # text2vec.load(corpus_path='./corpus.json', emb_path='./emb.index')
+    text2vec.save(corpus_path='../cache/corpus.jsonl', emb_path='../cache/emb.jsonl')
+    text2vec.load(corpus_path='../cache/corpus.jsonl', emb_path='../cache/emb.jsonl')
     print(text2vec.search('你好'))
     print(text2vec.search(['你好', '天气晴']))
 
 
 if __name__ == '__main__':
-    literal_similarity(SimHashSimilarity)
+    literal_similarity(TfidfSimilarity)

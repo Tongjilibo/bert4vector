@@ -14,6 +14,8 @@ class SimilarityBase:
         self.corpus = {}
         self.corpus_embeddings = {}
         self.matchint_type = matching_type
+        self.corpus_path = 'config.jsonl'
+        self.emb_path = 'emg.jsonl'
         if corpus is not None:
             self.add_corpus(corpus)
 
@@ -73,6 +75,20 @@ class SimilarityBase:
         :param corpus: 语料的list
         :param name: sub_corpus名
         """
+        # 添加语料并放到语料库
+        new_corpus = self._add_corpus(corpus=corpus, name=name)
+        
+        # 转向量并放到向量库
+        self._add_embedding(new_corpus=new_corpus, name=name, **kwargs)
+
+        # log
+        msg = f"Add {len(new_corpus)} docs for `{name}`, total: {len(self.corpus[name])}"
+        if len(self.corpus_embeddings[name]) > 0:
+            msg += f", emb dim: {len(self.corpus_embeddings[name][0])}"
+        logger.info(msg)
+
+    def _add_corpus(self, corpus: List[str], name:str='default', **kwargs):
+        '''添加语料并放到语料库'''
         new_corpus, new_corpus_set = {}, set()
         if name not in self.corpus:
             self.corpus[name] = {}
@@ -90,14 +106,8 @@ class SimilarityBase:
 
         self.corpus[name].update(new_corpus)
         del new_corpus_set
-        
-        # 转向量并放到向量库
-        self._add_embedding(new_corpus=new_corpus, name=name, **kwargs)
-        msg = f"Add {len(new_corpus)} docs for `{name}`, total: {len(self.corpus[name])}"
-        if len(self.corpus_embeddings[name]) > 0:
-            msg += f", emb dim: {len(self.corpus_embeddings[name][0])}"
-        logger.info(msg)
-
+        return new_corpus
+    
     def _add_embedding(self, new_corpus:Dict[int, str], name:str='default', **kwargs):
         '''转向量并放到向量库
         :param corpus: 语料的list
@@ -114,7 +124,7 @@ class SimilarityBase:
         corpus_embeddings = []
         for sentence in tqdm(list(new_corpus.values()), desc="Encoding"):
             corpus_embeddings.append(self.encode(sentence))
-        self.corpus_embeddings[name] = self.corpus_embeddings[name] + corpus_embeddings
+        self.corpus_embeddings[name] = self.corpus_embeddings.get(name) + corpus_embeddings
 
     def similarity(self, a: Union[str, List[str]], b: Union[str, List[str]]):
         """
@@ -142,33 +152,52 @@ class SimilarityBase:
         '''同时保存语料和embedding'''
         self._save_corpus(corpus_path)
         self._save_embeddings(emb_path)
+        logger.info(f'Successfully save corpus: {corpus_path or self.corpus_path}; emb: {emb_path or self.emb_path}')
 
     def load(self, corpus_path:Path=None, emb_path:Path=None):
         '''同时加载语料和embedding'''
         self._load_corpus(corpus_path)
         self._load_embeddings(emb_path)
+        logger.info(f'Successfully load corpus: {corpus_path or self.corpus_path}; emb: {emb_path or self.emb_path}')
     
-    def _save_embeddings(emb_path):
-        pass
+    def _save_embeddings(self, emb_path:Path=None):
+        '''保存emb到文件'''
+        emb_path = self.emb_path if emb_path is None else emb_path
+        with open(emb_path, 'w', encoding='utf-8') as f:
+            for name, sub_emb in self.corpus_embeddings.items():
+                for emb in sub_emb:
+                    json_obj = {"name": name, "emb": emb}
+                    f.write(json.dumps(json_obj, ensure_ascii=False) + "\n")
 
-    def _load_embeddings(emb_path):
-        pass
+    def _load_embeddings(self, emb_path:Path=None):
+        '''从文件加载emb'''
+        emb_path = self.emb_path if emb_path is None else emb_path
+        self.corpus_embeddings = {}
+        with open(emb_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                json_obj = json.loads(line)
+                name = json_obj['name']
+                if name not in self.corpus_embeddings:
+                    self.corpus_embeddings[name] = []
+                self.corpus_embeddings[name].append(json_obj['emb'])
 
     def _save_corpus(self, corpus_path:Path=None):
         '''保存语料到文件'''
-        corpus_path = "corpus.json" if corpus_path is None else corpus_path
+        corpus_path = self.corpus_path if corpus_path is None else corpus_path
         with open(corpus_path, 'w', encoding='utf-8') as f:
-            json.dump(self.corpus, f, ensure_ascii=False, indent=4)
-        logger.info(f'Successfully save corpus: {corpus_path}')
+            for name, sub_corpus in self.corpus.items():
+                for idx, text in sub_corpus.items():
+                    json_obj = {"name": name, "id": idx, "text": text}
+                    f.write(json.dumps(json_obj, ensure_ascii=False) + "\n")
 
     def _load_corpus(self, corpus_path:Path=None):
         '''从文件加载语料'''
-        corpus_path = "corpus.json" if corpus_path is None else corpus_path
+        corpus_path = self.corpus_path if corpus_path is None else corpus_path
+        self.corpus = {}
         with open(corpus_path, 'r', encoding='utf-8') as f:
-            self.corpus = json.load(f)
-        # 修改id的type为int
-        for name, sub_corpus in self.corpus.items():
-            ids = list(sub_corpus.keys())
-            for id in ids:
-                sub_corpus[int(id)] = sub_corpus.pop(id)
-        logger.info(f'Successfully load corpus: {corpus_path}')
+            for line in f:
+                json_obj = json.loads(line)
+                name = json_obj['name']
+                if name not in self.corpus:
+                    self.corpus[name] = {}
+                self.corpus[name][json_obj['id']] = json_obj['text']

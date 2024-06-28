@@ -21,6 +21,7 @@ pwd_path = os.path.abspath(os.path.dirname(__file__))
 
 class SameCharsSimilarity(SimilarityBase):
     """基于相同字符数占比计算相似度（不考虑文本字符位置顺序）
+
     ## Example:
     ```python
     >>> from bert4vector.core import SameCharsSimilarity
@@ -51,7 +52,7 @@ class SameCharsSimilarity(SimilarityBase):
         similarity_score = max(len(same) / len(set(emb1)), len(same) / len(set(emb2)))
         return similarity_score
     
-    def similarity(self, a: Union[str, List[str]], b: Union[str, List[str]], **kwargs) -> List:
+    def similarity(self, a: Union[str, List[str]], b: Union[str, List[str]], **kwargs) -> List[float]:
         """计算两组texts之间的相同字符数占比相似度, 要求a和b的长度一致
         :param a:
         :param b:
@@ -66,7 +67,7 @@ class SameCharsSimilarity(SimilarityBase):
         return [self.calc_pair_sim(self.encode(sentence1), self.encode(sentence2), **kwargs) 
                 for sentence1, sentence2 in zip(a, b)]
 
-    def distance(self, a: Union[str, List[str]], b: Union[str, List[str]]) -> List:
+    def distance(self, a: Union[str, List[str]], b: Union[str, List[str]]) -> List[float]:
         """Compute cosine distance between two texts."""
         return [1 - s for s in self.similarity(a, b)]
 
@@ -132,37 +133,29 @@ class HownetSimilarity(SameCharsSimilarity):
     default_hownet_path = os.path.join(pwd_path, '../config/hownet.txt')
 
     def __init__(self, corpus: List[str] = None, hownet_path: str = default_hownet_path, matching_type:str='HownetSimilarity'):
-        self.hownet_dict = self.load_hownet_dict(hownet_path)  # semantic dictionary
-        import jieba, jieba.posseg, jieba.analyse
-        self.jieba, self.jieba.posseg, self.jieba.analyse = jieba, jieba.posseg, jieba.analyse
-        super().__init__(corpus=corpus, matching_type=matching_type)
-
-    @staticmethod
-    def load_hownet_dict(path):
-        """加载Hownet语义词典"""
-        hownet_dict = {}
-        for line in open(path, 'r', encoding='utf-8'):
+        # 加载Hownet语义词典
+        self.hownet_dict = {}
+        for line in open(hownet_path, 'r', encoding='utf-8'):
             words = [word for word in line.strip().replace(' ', '>').replace('\t', '>').split('>') if word != '']
             word = words[0]
             word_def = words[2]
-            hownet_dict[word] = word_def.split(',')
-        return hownet_dict
+            self.hownet_dict[word] = word_def.split(',')
 
-    def _semantic_sim(self, sem1, sem2):
-        """计算语义相似度"""
-        sem_inter = set(sem1).intersection(set(sem2))
-        sem_union = set(sem1).union(set(sem2))
-        return float(len(sem_inter)) / float(len(sem_union))
+        import jieba, jieba.posseg, jieba.analyse
+        self.jieba, self.jieba.posseg, self.jieba.analyse = jieba, jieba.posseg, jieba.analyse
+        super().__init__(corpus=corpus, matching_type=matching_type)
 
     def _word_sim(self, word1, word2):
         """比较两个词语之间的相似度"""
         sems_word1 = self.hownet_dict.get(word1, [])
         sems_words = self.hownet_dict.get(word2, [])
-        scores = [self._semantic_sim(sem_word1, sem_word2) for sem_word1 in sems_word1 for sem_word2 in sems_words]
-        if scores:
-            return max(scores)
-        else:
-            return 0
+        scores = []
+        for sem_word1 in sems_word1:
+            for sem_word2 in sems_words:
+                sem_inter = set(sem_word1).intersection(set(sem_word2))
+                sem_union = set(sem_word1).union(set(sem_word2))
+                scores.append(float(len(sem_inter)) / float(len(sem_union)))
+        return max(scores) if scores else 0
 
     def calc_pair_sim(self, emb1:str, emb2:str):
         words1 = [word.word for word in self.jieba.posseg.cut(emb1) if word.flag[0] not in ['u', 'x', 'w']]
@@ -184,39 +177,49 @@ class SimHashSimilarity(SameCharsSimilarity):
     """
     def __init__(self, corpus: List[str] = None, matching_type:str='SimHashSimilarity'):
         super().__init__(corpus=corpus, matching_type=matching_type)
+        self.emb_path = "hash_emb.jsonl"
         import jieba, jieba.posseg, jieba.analyse
         self.jieba, self.jieba.posseg, self.jieba.analyse = jieba, jieba.posseg, jieba.analyse
 
-    def encode(self, sentence: str):
+    def encode(self, sentences: Union[str, List[str]]):
         """
         Compute SimHash for a given text.
         :param sentence: str
         :return: hash code
         """
-        seg = self.jieba.cut(sentence)
-        key_word = self.jieba.analyse.extract_tags('|'.join(seg), topK=None, withWeight=True, allowPOS=())
-        # 先按照权重排序，再按照词排序
-        key_list = []
-        for feature, weight in key_word:
-            weight = int(weight * 20)
-            temp = []
-            for f in string_hash(feature):
-                if f == '1':
-                    temp.append(weight)
+        if isinstance(sentences, str):
+            is_input_string = True
+            sentences = [sentences]
+        else:
+            is_input_string = False
+
+        hash_codes = []
+        for sentence in sentences:
+            seg = self.jieba.cut(sentence)
+            key_word = self.jieba.analyse.extract_tags('|'.join(seg), topK=None, withWeight=True, allowPOS=())
+            # 先按照权重排序，再按照词排序
+            key_list = []
+            for feature, weight in key_word:
+                weight = int(weight * 20)
+                temp = []
+                for f in string_hash(feature):
+                    if f == '1':
+                        temp.append(weight)
+                    else:
+                        temp.append(-weight)
+                key_list.append(temp)
+            content_list = np.sum(np.array(key_list), axis=0)
+            # 编码读不出来
+            if len(key_list) == 0:
+                return '00'
+            hash_code = ''
+            for c in content_list:
+                if c > 0:
+                    hash_code = hash_code + '1'
                 else:
-                    temp.append(-weight)
-            key_list.append(temp)
-        content_list = np.sum(np.array(key_list), axis=0)
-        # 编码读不出来
-        if len(key_list) == 0:
-            return '00'
-        hash_code = ''
-        for c in content_list:
-            if c > 0:
-                hash_code = hash_code + '1'
-            else:
-                hash_code = hash_code + '0'
-        return hash_code
+                    hash_code = hash_code + '0'
+            hash_codes.append(hash_code)
+        return hash_codes[0] if is_input_string else hash_codes
 
     def calc_pair_sim(self, emb1:str, emb2:str):
         """Convert hamming distance to similarity score."""
@@ -226,157 +229,48 @@ class SimHashSimilarity(SameCharsSimilarity):
             score = 1 - hamming_distance(emb1, emb2, normalize=True)
         return score
 
-    def _save_embeddings(self, emb_path: str = "hash_corpus_emb.jsonl"):
-        """
-        Save corpus embeddings to jsonl file.
-        :param emb_path: jsonl file path
-        :return:
-        """
-        with open(emb_path, "w", encoding="utf-8") as f:
-            for id, emb in zip(self.corpus.keys(), self.corpus_embeddings):
-                json_obj = {"id": id, "doc": self.corpus[id], "doc_emb": list(emb)}
-                f.write(json.dumps(json_obj, ensure_ascii=False) + "\n")
-        logger.debug(f"Save corpus embeddings to file: {emb_path}.")
 
-    def _load_embeddings(self, emb_path: str = "hash_corpus_emb.jsonl"):
-        """
-        Load corpus embeddings from jsonl file.
-        :param emb_path: jsonl file path
-        :return:
-        """
-        try:
-            with open(emb_path, "r", encoding="utf-8") as f:
-                corpus_embeddings = []
-                for line in f:
-                    json_obj = json.loads(line)
-                    self.corpus[int(json_obj["id"])] = json_obj["doc"]
-                    corpus_embeddings.append(json_obj["doc_emb"])
-                self.corpus_embeddings = corpus_embeddings
-        except (IOError, json.JSONDecodeError):
-            logger.error("Error: Could not load corpus embeddings from file.")
-
-
-class TfidfSimilarity(SimilarityBase):
+class TfidfSimilarity(SameCharsSimilarity):
+    """计算两组texts之间的相似度
     """
-    Compute TFIDF similarity between two sentences and retrieves most
-    similar sentence for a given corpus.
-    """
-
-    def __init__(self, corpus: List[str] = None):
-        super().__init__()
+    def __init__(self, corpus: List[str] = None, matching_type:str='TfidfSimilarity'):
+        super().__init__(corpus=corpus, matching_type=matching_type)
         self.tfidf = TFIDF()
 
-    def __len__(self):
-        """Get length of corpus."""
-        return len(self.corpus)
-
-    def __str__(self):
-        base = f"Similarity: {self.__class__.__name__}, matching_model: Tfidf"
-        if self.corpus:
-            base += f", corpus size: {len(self.corpus)}"
-        return base
-
-    def add_corpus(self, corpus: List[str]):
-        """
-        Extend the corpus with new documents.
-
-        Parameters
-        ----------
-        corpus : list of str
-        """
-        corpus_new = {}
-        start_id = len(self.corpus) if self.corpus else 0
-        if isinstance(corpus, list):
-            for id, doc in enumerate(corpus):
-                if doc not in list(self.corpus.values()):
-                    corpus_new[start_id + id] = doc
+    def encode(self, sentences:Union[str, List], **kwargs):
+        if isinstance(sentences, List):
+            return [self.tfidf.get_tfidf(sentence) for sentence in sentences]
         else:
-            for id, doc in corpus.items():
-                if doc not in list(self.corpus.values()):
-                    corpus_new[id] = doc
-        self.corpus.update(corpus_new)
+            return self.tfidf.get_tfidf(sentences)
 
-        logger.info(f"Start computing corpus embeddings, new docs: {len(corpus_new)}")
-        corpus_texts = list(corpus_new.values())
-        corpus_embeddings = []
-        for sentence in tqdm(corpus_texts, desc="Computing corpus TFIDF"):
-            corpus_embeddings.append(self.tfidf.get_tfidf(sentence))
-        if self.corpus_embeddings:
-            self.corpus_embeddings += corpus_embeddings
-        else:
-            self.corpus_embeddings = corpus_embeddings
-        logger.info(f"Add {len(corpus)} docs, total: {len(self.corpus)}, emb size: {len(self.corpus_embeddings)}")
-
-    def similarity(self, a: Union[str, List[str]], b: Union[str, List[str]]):
-        """
-        Compute cosine similarity score between two sentences.
-        :param a:
-        :param b:
-        :return:
-        """
+    def similarity(self, a: Union[str, List[str]], b: Union[str, List[str]]) -> np.ndarray:
         if isinstance(a, str):
             a = [a]
         if isinstance(b, str):
             b = [b]
-        features1 = [self.tfidf.get_tfidf(text) for text in a]
-        features2 = [self.tfidf.get_tfidf(text) for text in b]
+        features1 = self.encode(a)
+        features2 = self.encode(b)
         return cos_sim(np.array(features1), np.array(features2))
 
-    def distance(self, a: Union[str, List[str]], b: Union[str, List[str]]):
+    def distance(self, a: Union[str, List[str]], b: Union[str, List[str]]) -> np.ndarray:
         """Compute cosine distance between two keys."""
         return 1 - self.similarity(a, b)
 
-    def search(self, queries: Union[str, List[str]], topn: int = 10):
-        """Find the topn most similar texts to the query against the corpus.
-        :param queries: list of str or str
-        :param topn: int
-        :return dict of dicts, {query_id: {corpus_id, score}, ...}
-        """
+    def search(self, queries: Union[str, List[str]], topk: int = 10):
         if isinstance(queries, str) or not hasattr(queries, '__len__'):
             queries = [queries]
-        if isinstance(queries, list):
-            queries = {id: query for id, query in enumerate(queries)}
         result = {qid: {} for qid, query in queries.items()}
         queries_ids_map = {i: id for i, id in enumerate(list(queries.keys()))}
         queries_texts = list(queries.values())
 
-        queries_embeddings = np.array([self.tfidf.get_tfidf(query) for query in queries_texts], dtype=np.float32)
+        queries_embeddings = np.array(self.encode(queries_texts), dtype=np.float32)
         corpus_embeddings = np.array(self.corpus_embeddings, dtype=np.float32)
-        all_hits = semantic_search(queries_embeddings, corpus_embeddings, top_k=topn)
+        all_hits = semantic_search(queries_embeddings, corpus_embeddings, top_k=topk)
         for idx, hits in enumerate(all_hits):
-            for hit in hits[0:topn]:
+            for hit in hits[0:topk]:
                 result[queries_ids_map[idx]][hit['corpus_id']] = hit['score']
 
         return result
-
-    def save_corpus_embeddings(self, emb_path: str = "tfidf_corpus_emb.jsonl"):
-        """
-        Save corpus embeddings to jsonl file.
-        :param emb_path: jsonl file path
-        :return:
-        """
-        with open(emb_path, "w", encoding="utf-8") as f:
-            for id, emb in zip(self.corpus.keys(), self.corpus_embeddings):
-                json_obj = {"id": id, "doc": self.corpus[id], "doc_emb": list(emb)}
-                f.write(json.dumps(json_obj, ensure_ascii=False) + "\n")
-        logger.debug(f"Save corpus embeddings to file: {emb_path}.")
-
-    def load_corpus_embeddings(self, emb_path: str = "tfidf_corpus_emb.jsonl"):
-        """
-        Load corpus embeddings from jsonl file.
-        :param emb_path: jsonl file path
-        :return:
-        """
-        try:
-            with open(emb_path, "r", encoding="utf-8") as f:
-                corpus_embeddings = []
-                for line in f:
-                    json_obj = json.loads(line)
-                    self.corpus[int(json_obj["id"])] = json_obj["doc"]
-                    corpus_embeddings.append(json_obj["doc_emb"])
-                self.corpus_embeddings = corpus_embeddings
-        except (IOError, json.JSONDecodeError):
-            logger.error("Error: Could not load corpus embeddings from file.")
 
 
 class BM25Similarity(SimilarityBase):

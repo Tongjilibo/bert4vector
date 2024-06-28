@@ -20,6 +20,7 @@ class BertSimilarity(SimilarityBase):
         self.model = self.build_model(model_name_or_path, **model_config)
         self.score_functions = {'cos_sim': cos_sim, 'dot': dot_score}
         super().__init__(corpus=corpus, matching_type=matching_type)
+        self.emb_path = "corpus_emb.jsonl"
 
     def build_model(self, model_name_or_path, **model_config):
         '''初始化模型'''
@@ -157,35 +158,3 @@ class BertSimilarity(SimilarityBase):
             queries = [queries]
         queries_embeddings = self.encode(queries, convert_to_tensor=True, **encode_kwargs)
         return queries, queries_embeddings
-
-    def _save_embeddings(self, emb_path:Path=None):
-        """ 把语料向量保存到json文件中
-        :param emb_path: json file path
-        :return:
-        """
-        emb_path = "corpus_emb.json" if emb_path is None else emb_path
-        corpus_emb = dict()
-        for name, sub_corpus in self.corpus.items():
-            corpus_emb[name] = {id: {"doc": sub_corpus[id], "doc_emb": emb} for id, emb in
-                                zip(sub_corpus.keys(), self.corpus_embeddings[name])}
-        with open(emb_path, "w", encoding="utf-8") as f:
-            json.dump(corpus_emb, f, ensure_ascii=False)
-        logger.info(f'Successfully save embeddings: {emb_path}')
-
-    def _load_embeddings(self, emb_path:Path=None):
-        """ 从json文件中加载语料向量
-        :param emb_path: json file path
-        :return: list of corpus embeddings, dict of corpus ids map, dict of corpus
-        """
-        emb_path = "corpus_emb.json" if emb_path is None else emb_path
-        with open(emb_path, "r", encoding="utf-8") as f:
-            corpus_emb = json.load(f)
-        corpus_embeddings = dict()
-        for name, sub_corpus_emb in corpus_emb.items():
-            sub_corpus_embeddings = []
-            for id, corpus_dict in sub_corpus_emb.items():
-                self.corpus[int(id)] = corpus_dict["doc"]
-                sub_corpus_embeddings.append(corpus_dict["doc_emb"])
-            corpus_embeddings[name] = sub_corpus_embeddings
-        self.corpus_embeddings = corpus_embeddings
-        logger.info(f'Successfully load embeddings: {emb_path}')

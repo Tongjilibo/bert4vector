@@ -20,8 +20,8 @@ def search(model_dir):
     model = BertSimilarity(model_dir)
     model.add_corpus(['你好', '我选你'])
     model.add_corpus(['天气不错', '人很好看'])
-    model.save(corpus_path='../cache/corpus.json', emb_path='../cache/emb.index')
-    model.load(corpus_path='../cache/corpus.json', emb_path='../cache/emb.index')
+    model.save(corpus_path='../cache/corpus.jsonl', emb_path='../cache/emb.index')
+    model.load(corpus_path='../cache/corpus.jsonl', emb_path='../cache/emb.index')
     print(model.search('你好'))
     print(model.search(['你好', '天气晴']))
 
