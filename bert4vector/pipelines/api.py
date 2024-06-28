@@ -3,7 +3,8 @@
 from typing import Optional, List, Union, Dict, Literal
 import json
 from loguru import logger
-from bert4vector.core import BertSimilarity, FaissSimilarity, LongestCommonSubstringSimilarity
+from bert4vector.core import BertSimilarity, FaissSimilarity, SameCharsSimilarity, LongestCommonSubstringSimilarity
+from bert4vector.core import HownetSimilarity, SimHashSimilarity, TfidfSimilarity, BM25Similarity, CilinSimilarity
 from bert4vector.snippets import cos_sim
 import traceback
 from torch4keras.snippets import is_package_available
@@ -27,7 +28,7 @@ class Corpus(BaseModel):
     name: str = 'default'
     encode_kwargs:dict = {}
 
-class BertSimilarity(BaseModel):
+class Similarity(BaseModel):
     query1: Union[str, List]
     query2: Union[str, List]
     score_function : str="cos_sim"
@@ -61,15 +62,26 @@ class SimilaritySever:
     ```
     """
     def __init__(self, 
-                 mode:Literal['BertVector', 'FaissVector', 'LongestCommonSubstringSimilarity']='BertVector',
                  model_name_or_path: str=None, 
+                 mode:Literal['BertVector', 'FaissVector', 'LongestCommonSubstringSimilarity', 'HownetSimilarity',
+                              'SimHashSimilarity', 'TfidfSimilarity', 'BM25Similarity', 'CilinSimilarity']='BertVector',
                  **model_config):
         if mode == 'BertVector':
             self.model = BertSimilarity(model_name_or_path, **model_config)
         elif mode == 'FaissVector':
             self.model = FaissSimilarity(model_name_or_path, **model_config)
         elif mode == 'LongestCommonSubstringSimilarity':
-            self.model = LongestCommonSubstringSimilarity()
+            self.model = LongestCommonSubstringSimilarity(**model_config)
+        elif mode == 'HownetSimilarity':
+            self.model = HownetSimilarity(**model_config)
+        elif mode == 'SimHashSimilarity':
+            self.model = SimHashSimilarity(**model_config)
+        elif mode == 'TfidfSimilarity':
+            self.model = TfidfSimilarity(**model_config)
+        elif mode == 'BM25Similarity':
+            self.model = BM25Similarity(**model_config)
+        elif mode == 'CilinSimilarity':
+            self.model = CilinSimilarity(**model_config)
         else:
             raise ValueError(f'Args `{mode}` not supported')
         logger.info(f'Load {mode} model success. model: {model_name_or_path}')
@@ -117,7 +129,7 @@ class SimilaritySever:
             logger.error(msg)
             return JSONResponse({'status': False, 'msg': msg}, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    async def similarity(self, req:BertSimilarity):
+    async def similarity(self, req:Similarity):
         '''计算两组texts之间的向量相似度
         ## Example:
         ### 入参

@@ -96,7 +96,3 @@ class BertSimilarity(VectorSimilarity):
             **encode_kwargs
         ).tolist()
         self.corpus_embeddings[name] = self.corpus_embeddings.get(name, []) + corpus_embeddings
-        
-    def _get_query_emb(self, queries:Union[str, List[str]], **encode_kwargs):
-        '''获取query的句向量'''        
-        return super().encode(queries, convert_to_tensor=True, **encode_kwargs)

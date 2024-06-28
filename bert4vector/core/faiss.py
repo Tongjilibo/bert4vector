@@ -106,7 +106,7 @@ class FaissSimilarity(BertSimilarity):
         ... #           {'corpus_id': 3, 'score': 0.800828, 'text': '人很好看'}]} 
         '''
         queries, queries_embeddings = super()._get_query_emb(queries, **kwargs)
-        distance, idx = self.indexes[name].search(np.array(queries_embeddings.cpu(), dtype=np.float32), topk)
+        distance, idx = self.indexes[name].search(queries_embeddings, topk)
         
         results = {}
         for idx, (i, s) in enumerate(zip(idx, distance)):

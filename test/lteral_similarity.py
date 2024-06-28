@@ -1,15 +1,17 @@
 '''字面的相似度test
 '''
-from bert4vector.core import SameCharsSimilarity, PairedSimilarity, LongestCommonSubstringSimilarity
-from bert4vector.core import HownetSimilarity, SimHashSimilarity, TfidfSimilarity
+from bert4vector.core import SameCharsSimilarity, LongestCommonSubstringSimilarity, CilinSimilarity
+from bert4vector.core import HownetSimilarity, SimHashSimilarity, TfidfSimilarity, BM25Similarity
 import pytest
 
 
-@pytest.mark.parametrize("text2vecClass", [PairedSimilarity,
+@pytest.mark.parametrize("text2vecClass", [SameCharsSimilarity,
                                            LongestCommonSubstringSimilarity,
                                            HownetSimilarity,
                                            SimHashSimilarity,
-                                           TfidfSimilarity])
+                                           TfidfSimilarity,
+                                           BM25Similarity,
+                                           CilinSimilarity])
 def literal_similarity(text2vecClass):
     '''最长公共子序列相似度'''
     text2vec = text2vecClass()
@@ -30,4 +32,4 @@ def literal_similarity(text2vecClass):
 
 
 if __name__ == '__main__':
-    literal_similarity(TfidfSimilarity)
+    literal_similarity(CilinSimilarity)
