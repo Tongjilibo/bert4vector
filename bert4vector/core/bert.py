@@ -1,24 +1,31 @@
-from loguru import logger
 from typing import List, Union, Dict, Literal
-import numpy as np
-import json
-from .base import SimilarityBase
-from bert4vector.snippets import cos_sim, dot_score, semantic_search
-from pathlib import Path
+from .base import VectorSimilarity
 
 
-class BertSimilarity(SimilarityBase):
+class BertSimilarity(VectorSimilarity):
     """ 在内存中存储和检索向量
     :param checkpoint_path: 模型权重地址
     :param config_path: 权重的config地址
     :param corpus: Corpus of documents to use for similarity queries.
     :param device: Device (like 'cuda' / 'cpu') to use for the computation.
+
+    Example:
+    ```python
+    >>> from bert4vector import BertVector
+    >>> model = BertVector('/data/pretrain_ckpt/simbert/sushen@simbert_chinese_tiny')
+    >>> model.add_corpus(['你好', '我选你'], gpu_index=True)
+    >>> model.add_corpus(['天气不错', '人很好看'], gpu_index=True)
+    >>> print(model.search('你好', topk=2))
+    >>> print(model.search(['你好', '天气晴']))
+
+    >>> # {'你好': [{'corpus_id': 0, 'score': 0.9999, 'text': '你好'},
+    ... #           {'corpus_id': 3, 'score': 0.5694, 'text': '人很好看'}]} 
+    ```
     """
     def __init__(self, model_name_or_path:str, model_type:Literal['bert4torch', 'sentence_transformers']='bert4torch', 
                  corpus: List[str] = None, matching_type:str='BertSimilarity', **model_config):
         self.model_type = model_type
         self.model = self.build_model(model_name_or_path, **model_config)
-        self.score_functions = {'cos_sim': cos_sim, 'dot': dot_score}
         super().__init__(corpus=corpus, matching_type=matching_type)
         self.emb_path = "corpus_emb.jsonl"
 
@@ -75,27 +82,6 @@ class BertSimilarity(SimilarityBase):
             max_seq_length=max_seq_length
         )
     
-    def similarity(self, a: Union[str, List[str]], b: Union[str, List[str]], score_function:str="cos_sim", **encode_kwargs):
-        """ 计算两组texts之间的向量相似度
-        :param a: list of str or str
-        :param b: list of str or str
-        :param score_function: function to compute similarity, default cos_sim
-        :param kwargs: additional arguments for the similarity function
-        :return: similarity score, torch.Tensor, Matrix with res[i][j] = cos_sim(a[i], b[j])
-        """
-        if score_function not in self.score_functions:
-            raise ValueError(f"score function: {score_function} must be either (cos_sim) for cosine similarity"
-                             " or (dot) for dot product")
-        score_function = self.score_functions[score_function]
-        text_emb1 = self.encode(a, **encode_kwargs)
-        text_emb2 = self.encode(b, **encode_kwargs)
-
-        return score_function(text_emb1, text_emb2)
-
-    def distance(self, a: Union[str, List[str]], b: Union[str, List[str]]):
-        """计算两组texts之间的cos距离"""
-        return 1 - self.similarity(a, b)
-
     def _add_embedding(self, new_corpus: Dict[int, str], name:str='default', **encode_kwargs):
         """ 使用文档chunk来转为向量
 
@@ -109,52 +95,8 @@ class BertSimilarity(SimilarityBase):
             show_progress_bar=True,
             **encode_kwargs
         ).tolist()
-        self.corpus_embeddings[name] = self.corpus_embeddings[name] + corpus_embeddings
-    
-    def search(self, queries: Union[str, List[str]], topk:int=10, score_function:str="cos_sim", name:str='default', **encode_kwargs) -> Dict[str, List]:
-        """ 在候选语料中寻找和query的向量最近似的topk个结果
-        :param queries:str or list of str
-        :param topk: int
-        :param score_function: function to compute similarity, default cos_sim
-        :param name: sub_corpus名
-        :param encode_kwargs: additional arguments for the similarity function
-
-        :return: Dict[str, Dict[str, float]], {query_id: {corpus_id: similarity_score}, ...}
-
-        Example:
-        ```python
-        >>> from bert4vector import BertVector
-        >>> model = BertVector('/data/pretrain_ckpt/simbert/sushen@simbert_chinese_tiny')
-        >>> model.add_corpus(['你好', '我选你'], gpu_index=True)
-        >>> model.add_corpus(['天气不错', '人很好看'], gpu_index=True)
-        >>> print(model.search('你好', topk=2))
-        >>> print(model.search(['你好', '天气晴']))
-
-        >>> # {'你好': [{'corpus_id': 0, 'score': 0.9999, 'text': '你好'},
-        ... #           {'corpus_id': 3, 'score': 0.5694, 'text': '人很好看'}]} 
-
-        """
-
-        queries, queries_embeddings = self._get_query_emb(queries, **encode_kwargs)
-        if score_function not in self.score_functions:
-            raise ValueError(f"score function: {score_function} must be either (cos_sim) for cosine similarity"
-                             " or (dot) for dot product")
-        score_function = self.score_functions[score_function]
-        corpus_embeddings = np.array(self.corpus_embeddings[name], dtype=np.float32)
-        all_hits = semantic_search(queries_embeddings, corpus_embeddings, top_k=topk, score_function=score_function)
+        self.corpus_embeddings[name] = self.corpus_embeddings.get(name, []) + corpus_embeddings
         
-        result = {}
-        for idx, hits in enumerate(all_hits):
-            items = []
-            for hit in hits[0:topk]:
-                corpus_id = hit['corpus_id']
-                items.append({**{'text': self.corpus[name][corpus_id]}, **hit})
-            result[queries[idx]] = items
-        return result
-    
     def _get_query_emb(self, queries:Union[str, List[str]], **encode_kwargs):
-        '''获取query的句向量'''
-        if isinstance(queries, str) or not hasattr(queries, '__len__'):
-            queries = [queries]
-        queries_embeddings = self.encode(queries, convert_to_tensor=True, **encode_kwargs)
-        return queries, queries_embeddings
+        '''获取query的句向量'''        
+        return super().encode(queries, convert_to_tensor=True, **encode_kwargs)

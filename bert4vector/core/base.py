@@ -5,6 +5,9 @@ from loguru import logger
 from torch4keras.snippets import print_table
 import random
 from tqdm import tqdm
+from bert4vector.snippets import cos_sim, dot_score, semantic_search
+from pathlib import Path
+import numpy as np
 
 
 class SimilarityBase:
@@ -43,11 +46,11 @@ class SimilarityBase:
             logger.error(f'Args `name`={name} not in {list(self.corpus.keys())}')
 
     def encode(self, sentences:Union[str, List], **kwargs):
-        '''sentences转为编码, 这里默认不做任何处理'''
-        return sentences
+        '''sentences转为编码'''
+        raise NotImplementedError("cannot instantiate Abstract Base Class")
 
     def summary(self, random_sample:bool=False, sample_count:int=2, verbose:int=1):
-        '''统计一个各个sub_corpus的情况'''
+        '''统计语料库分布的情况'''
         json_format, table_format = {}, []
         for name, sub_corpus in self.corpus.items():
             len_sub_corpus = len(sub_corpus)
@@ -123,8 +126,11 @@ class SimilarityBase:
         # 转向量并放到向量库
         corpus_embeddings = []
         for sentence in tqdm(list(new_corpus.values()), desc="Encoding"):
-            corpus_embeddings.append(self.encode(sentence))
-        self.corpus_embeddings[name] = self.corpus_embeddings.get(name) + corpus_embeddings
+            sent_emb = self.encode(sentence, **kwargs)
+            if isinstance(sent_emb, np.ndarray):
+                sent_emb = sent_emb.tolist()                
+            corpus_embeddings.append(sent_emb)
+        self.corpus_embeddings[name] = self.corpus_embeddings.get(name, []) + corpus_embeddings
 
     def similarity(self, a: Union[str, List[str]], b: Union[str, List[str]]):
         """
@@ -201,3 +207,115 @@ class SimilarityBase:
                 if name not in self.corpus:
                     self.corpus[name] = {}
                 self.corpus[name][json_obj['id']] = json_obj['text']
+
+
+class PairedSimilarity(SimilarityBase):
+    '''成对的texts组相似度计算'''
+    def __init__(self, corpus: List[str] = None, matching_type:str='PairedSimilarity'):
+        super().__init__(corpus=corpus, matching_type=matching_type)
+   
+    def encode(self, sentences:Union[str, List], **kwargs):
+        '''sentences转为编码, 这里默认不做任何处理'''
+        return sentences
+
+    def calc_pair_sim(self, emb1:str, emb2:str, **kwargs):
+        '''计算两个编码之间的相似度'''
+        raise NotImplementedError("cannot instantiate Abstract Base Class")
+    
+    def similarity(self, a: Union[str, List[str]], b: Union[str, List[str]], **kwargs) -> List[float]:
+        """计算两组texts之间的相同字符数占比相似度, 要求a和b的长度一致
+        :param a:
+        :param b:
+        :return:
+        """
+        if isinstance(a, str):
+            a = [a]
+        if isinstance(b, str):
+            b = [b]
+        if len(a) != len(b):
+            raise ValueError("expected two inputs of the same length")
+        return [self.calc_pair_sim(self.encode(sentence1), self.encode(sentence2), **kwargs) 
+                for sentence1, sentence2 in zip(a, b)]
+
+    def distance(self, a: Union[str, List[str]], b: Union[str, List[str]]) -> List[float]:
+        """Compute cosine distance between two texts."""
+        return [1 - s for s in self.similarity(a, b)]
+
+    def search(self, queries: Union[str, List[str]], topk: int = 10, name:str='default') -> Dict[str, List]:
+        """Find the topn most similar texts to the query against the corpus."""
+        if isinstance(queries, str) or not hasattr(queries, '__len__'):
+            queries = [queries]
+
+        result = {}
+        for query in queries:
+            q_res = []
+            query_emb = self.encode(query)
+            for (corpus_id, text), doc_emb in zip(self.corpus[name].items(), self.corpus_embeddings[name]):
+                score = self.similarity(query_emb, doc_emb)[0]
+                q_res.append({'text': text, 'corpus_id': corpus_id, 'score': score})
+            q_res.sort(key=lambda x: x['score'], reverse=True)
+            result[query] = q_res[:topk]
+        return result
+    
+
+class VectorSimilarity(SimilarityBase):
+    '''基于向量的相似度计算'''
+    def __init__(self, corpus: List[str] = None, matching_type:str='PairedSimilarity'):
+        super().__init__(corpus=corpus, matching_type=matching_type)
+        self.score_functions = {'cos_sim': cos_sim, 'dot': dot_score}
+
+    def similarity(self, a: Union[str, List[str]], b: Union[str, List[str]], score_function:str="cos_sim", **encode_kwargs):
+        """ 计算两组texts之间的向量相似度
+        :param a: list of str or str
+        :param b: list of str or str
+        :param score_function: function to compute similarity, default cos_sim
+        :param kwargs: additional arguments for the similarity function
+        :return: similarity score, torch.Tensor, Matrix with res[i][j] = cos_sim(a[i], b[j])
+        """
+        if score_function not in self.score_functions:
+            raise ValueError(f"score function: {score_function} must be either (cos_sim) for cosine similarity"
+                             " or (dot) for dot product")
+        score_function = self.score_functions[score_function]
+        text_emb1 = self.encode(a, **encode_kwargs)
+        text_emb2 = self.encode(b, **encode_kwargs)
+
+        return score_function(text_emb1, text_emb2)
+
+    def distance(self, a: Union[str, List[str]], b: Union[str, List[str]]):
+        """计算两组texts之间的cos距离"""
+        return 1 - self.similarity(a, b)
+
+    def search(self, queries: Union[str, List[str]], topk:int=10, score_function:str="cos_sim", name:str='default', **encode_kwargs) -> Dict[str, List]:
+        """ 在候选语料中寻找和query的向量最近似的topk个结果
+        :param queries:str or list of str
+        :param topk: int
+        :param score_function: function to compute similarity, default cos_sim
+        :param name: sub_corpus名
+        :param encode_kwargs: additional arguments for the similarity function
+
+        :return: Dict[str, Dict[str, float]], {query_id: {corpus_id: similarity_score}, ...}
+        """
+
+        queries, queries_embeddings = self._get_query_emb(queries, **encode_kwargs)
+        if score_function not in self.score_functions:
+            raise ValueError(f"score function: {score_function} must be either (cos_sim) for cosine similarity"
+                             " or (dot) for dot product")
+        score_function = self.score_functions[score_function]
+        corpus_embeddings = np.array(self.corpus_embeddings[name], dtype=np.float32)
+        all_hits = semantic_search(queries_embeddings, corpus_embeddings, top_k=topk, score_function=score_function)
+        
+        result = {}
+        for idx, hits in enumerate(all_hits):
+            items = []
+            for hit in hits[0:topk]:
+                corpus_id = hit['corpus_id']
+                items.append({**{'text': self.corpus[name][corpus_id]}, **hit})
+            result[queries[idx]] = items
+        return result
+
+    def _get_query_emb(self, queries:Union[str, List[str]], **encode_kwargs):
+        '''获取query的句向量'''
+        if isinstance(queries, str) or not hasattr(queries, '__len__'):
+            queries = [queries]
+        queries_embeddings = self.encode(queries, **encode_kwargs)
+        return queries, queries_embeddings

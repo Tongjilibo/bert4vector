@@ -1,15 +1,16 @@
 '''字面的相似度test
 '''
-from bert4vector.core import SameCharsSimilarity, LongestCommonSubstringSimilarity, SimilarityBase
-from bert4vector.core import HownetSimilarity, SimHashSimilarity,TfidfSimilarity
+from bert4vector.core import SameCharsSimilarity, PairedSimilarity, LongestCommonSubstringSimilarity
+from bert4vector.core import HownetSimilarity, SimHashSimilarity, TfidfSimilarity
 import pytest
 
 
-@pytest.mark.parametrize("text2vecClass", [SameCharsSimilarity,
+@pytest.mark.parametrize("text2vecClass", [PairedSimilarity,
                                            LongestCommonSubstringSimilarity,
                                            HownetSimilarity,
-                                           SimHashSimilarity])
-def literal_similarity(text2vecClass:SimilarityBase):
+                                           SimHashSimilarity,
+                                           TfidfSimilarity])
+def literal_similarity(text2vecClass):
     '''最长公共子序列相似度'''
     text2vec = text2vecClass()
     sent1 = ['喜欢打篮球的男生喜欢什么样的女生', '西安下雪了？是不是很冷啊?', '第一次去见女朋友父母该如何表现？', '小蝌蚪找妈妈怎么样', 

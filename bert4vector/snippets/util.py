@@ -20,11 +20,11 @@ def cos_sim(a: Union[torch.Tensor, np.ndarray], b: Union[torch.Tensor, np.ndarra
     """
     is_tensor = True
     if not isinstance(a, torch.Tensor):
-        a = torch.tensor(a)
+        a = torch.tensor(a, dtype=torch.float)
         is_tensor = False
 
     if not isinstance(b, torch.Tensor):
-        b = torch.tensor(b)
+        b = torch.tensor(b, dtype=torch.float)
         is_tensor = False
 
     if len(a.shape) == 1:

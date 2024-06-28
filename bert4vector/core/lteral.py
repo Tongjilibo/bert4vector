@@ -7,19 +7,17 @@ import os
 from typing import List, Union, Dict
 import numpy as np
 from loguru import logger
-from tqdm import tqdm
-from .base import SimilarityBase
+from .base import PairedSimilarity, VectorSimilarity
 from ..snippets.distance import string_hash, hamming_distance, longest_common_substring_size
 from ..snippets.rank_bm25 import BM25Okapi
 from ..snippets.tfidf import TFIDF, load_stopwords, default_stopwords_file
 from ..snippets.util import cos_sim, semantic_search
-from torch4keras.snippets import is_package_available
 
 
 pwd_path = os.path.abspath(os.path.dirname(__file__))
 
 
-class SameCharsSimilarity(SimilarityBase):
+class SameCharsSimilarity(PairedSimilarity):
     """基于相同字符数占比计算相似度（不考虑文本字符位置顺序）
 
     ## Example:
@@ -43,7 +41,7 @@ class SameCharsSimilarity(SimilarityBase):
     """
     def __init__(self, corpus: List[str] = None, matching_type:str='SameCharsSimilarity'):
         super().__init__(corpus=corpus, matching_type=matching_type)
-   
+
     def calc_pair_sim(self, emb1:str, emb2:str, **kwargs):
         '''计算两个编码之间的相似度'''
         if not emb1 or not emb2:
@@ -51,44 +49,8 @@ class SameCharsSimilarity(SimilarityBase):
         same = set(emb1) & set(emb2)
         similarity_score = max(len(same) / len(set(emb1)), len(same) / len(set(emb2)))
         return similarity_score
-    
-    def similarity(self, a: Union[str, List[str]], b: Union[str, List[str]], **kwargs) -> List[float]:
-        """计算两组texts之间的相同字符数占比相似度, 要求a和b的长度一致
-        :param a:
-        :param b:
-        :return:
-        """
-        if isinstance(a, str):
-            a = [a]
-        if isinstance(b, str):
-            b = [b]
-        if len(a) != len(b):
-            raise ValueError("expected two inputs of the same length")
-        return [self.calc_pair_sim(self.encode(sentence1), self.encode(sentence2), **kwargs) 
-                for sentence1, sentence2 in zip(a, b)]
 
-    def distance(self, a: Union[str, List[str]], b: Union[str, List[str]]) -> List[float]:
-        """Compute cosine distance between two texts."""
-        return [1 - s for s in self.similarity(a, b)]
-
-    def search(self, queries: Union[str, List[str]], topk: int = 10, name:str='default') -> Dict[str, List]:
-        """Find the topn most similar texts to the query against the corpus."""
-        if isinstance(queries, str) or not hasattr(queries, '__len__'):
-            queries = [queries]
-
-        result = {}
-        for query in queries:
-            q_res = []
-            query_emb = self.encode(query)
-            for (corpus_id, text), doc_emb in zip(self.corpus[name].items(), self.corpus_embeddings[name]):
-                score = self.similarity(query_emb, doc_emb)[0]
-                q_res.append({'text': text, 'corpus_id': corpus_id, 'score': score})
-            q_res.sort(key=lambda x: x['score'], reverse=True)
-            result[query] = q_res[:topk]
-        return result
-
-
-class LongestCommonSubstringSimilarity(SameCharsSimilarity):
+class LongestCommonSubstringSimilarity(PairedSimilarity):
     """基于最长公共子串占比计算相似度
 
     ## Example:
@@ -127,7 +89,7 @@ class LongestCommonSubstringSimilarity(SameCharsSimilarity):
         return similarity_score
     
 
-class HownetSimilarity(SameCharsSimilarity):
+class HownetSimilarity(PairedSimilarity):
     """计算两组texts之间的Hownet相似度
     """
     default_hownet_path = os.path.join(pwd_path, '../config/hownet.txt')
@@ -172,7 +134,7 @@ class HownetSimilarity(SameCharsSimilarity):
         return similarity_score
 
 
-class SimHashSimilarity(SameCharsSimilarity):
+class SimHashSimilarity(PairedSimilarity):
     """计算两组texts之间的SimHash相似度
     """
     def __init__(self, corpus: List[str] = None, matching_type:str='SimHashSimilarity'):
@@ -230,64 +192,31 @@ class SimHashSimilarity(SameCharsSimilarity):
         return score
 
 
-class TfidfSimilarity(SameCharsSimilarity):
-    """计算两组texts之间的相似度
+class TfidfSimilarity(VectorSimilarity):
+    """计算两组texts之间的Tfidf相似度
     """
     def __init__(self, corpus: List[str] = None, matching_type:str='TfidfSimilarity'):
         super().__init__(corpus=corpus, matching_type=matching_type)
         self.tfidf = TFIDF()
 
-    def encode(self, sentences:Union[str, List], **kwargs):
+    def encode(self, sentences:Union[str, List], **kwargs) -> np.ndarray:
         if isinstance(sentences, List):
-            return [self.tfidf.get_tfidf(sentence) for sentence in sentences]
+            emb = [self.tfidf.get_tfidf(sentence) for sentence in sentences]
         else:
-            return self.tfidf.get_tfidf(sentences)
-
-    def similarity(self, a: Union[str, List[str]], b: Union[str, List[str]]) -> np.ndarray:
-        if isinstance(a, str):
-            a = [a]
-        if isinstance(b, str):
-            b = [b]
-        features1 = self.encode(a)
-        features2 = self.encode(b)
-        return cos_sim(np.array(features1), np.array(features2))
-
-    def distance(self, a: Union[str, List[str]], b: Union[str, List[str]]) -> np.ndarray:
-        """Compute cosine distance between two keys."""
-        return 1 - self.similarity(a, b)
-
-    def search(self, queries: Union[str, List[str]], topk: int = 10):
-        if isinstance(queries, str) or not hasattr(queries, '__len__'):
-            queries = [queries]
-        result = {qid: {} for qid, query in queries.items()}
-        queries_ids_map = {i: id for i, id in enumerate(list(queries.keys()))}
-        queries_texts = list(queries.values())
-
-        queries_embeddings = np.array(self.encode(queries_texts), dtype=np.float32)
-        corpus_embeddings = np.array(self.corpus_embeddings, dtype=np.float32)
-        all_hits = semantic_search(queries_embeddings, corpus_embeddings, top_k=topk)
-        for idx, hits in enumerate(all_hits):
-            for hit in hits[0:topk]:
-                result[queries_ids_map[idx]][hit['corpus_id']] = hit['score']
-
-        return result
+            emb = self.tfidf.get_tfidf(sentences)
+        return np.array(emb, dtype=np.float32)
 
 
-class BM25Similarity(SimilarityBase):
+class BM25Similarity(PairedSimilarity):
     """
     Compute BM25OKapi similarity between two sentences and retrieves most
     similar sentence for a given corpus.
     """
 
-    def __init__(self, corpus: List[str] = None):
-        super().__init__()
-        self.corpus = {}
-
+    def __init__(self, corpus: List[str] = None, matching_type:str='BM25Similarity'):
+        super().__init__(corpus=corpus, matching_type=matching_type)
         self.bm25 = None
         self.default_stopwords = load_stopwords(default_stopwords_file)
-        if corpus is not None:
-            self.add_corpus(corpus)
-        
         import jieba, jieba.posseg, jieba.analyse
         self.jieba, self.jieba.posseg, self.jieba.analyse = jieba, jieba.posseg, jieba.analyse
 
@@ -351,7 +280,7 @@ class BM25Similarity(SimilarityBase):
         return result
 
 
-class WordEmbeddingSimilarity(SimilarityBase):
+class WordEmbeddingSimilarity(PairedSimilarity):
     """
     Compute Word2Vec similarity between two sentences and retrieves most
     similar sentence for a given corpus.
@@ -485,7 +414,7 @@ class WordEmbeddingSimilarity(SimilarityBase):
             logger.error("Error: Could not load corpus embeddings from file.")
 
 
-class CilinSimilarity(SimilarityBase):
+class CilinSimilarity(PairedSimilarity):
     """
     Compute Cilin similarity between two sentences and retrieves most
     similar sentence for a given corpus.
