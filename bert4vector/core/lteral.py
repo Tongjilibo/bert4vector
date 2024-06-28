@@ -19,6 +19,11 @@ pwd_path = os.path.abspath(os.path.dirname(__file__))
 __all__ = [
     'SameCharsSimilarity',
     'LongestCommonSubstringSimilarity',
+    'HownetSimilarity',
+    'SimHashSimilarity',
+    'TfidfSimilarity',
+    'BM25Similarity',
+    'CilinSimilarity'
  ]
 
 class SameCharsSimilarity(PairedSimilarity):

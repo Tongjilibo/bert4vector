@@ -195,7 +195,7 @@ class SimilaritySever:
         try:
             query = req.query
             result = self.model.search(query, topk=req.topk, score_function=req.score_function, name=req.name, **req.encode_kwargs)
-            msg = f"Successfully search from {req.name} done, query:{query}, res size: {len(result)}"
+            msg = f"Successfully search from {req.name} done, query:{query}, result: {result}"
             logger.info(msg)
             result_dict = {'result': result, 'status': True, 'msg': msg}
             return JSONResponse(result_dict, status_code=status.HTTP_200_OK)

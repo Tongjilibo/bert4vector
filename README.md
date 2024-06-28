@@ -29,7 +29,18 @@ pip install bert4vector
 pip install git+https://github.com/Tongjilibo/bert4vector
 ```
 
-## 2. 支持的句向量权重
+## 2. 快速使用
+```python
+from bert4vector import BertVector
+model = BertVector('/data/pretrain_ckpt/simbert/sushen@simbert_chinese_tiny')
+model.add_corpus(['你好', '我选你', '天气不错', '人很好看'], gpu_index=True)
+print(model.search('你好', topk=2))
+# {'你好': [{'corpus_id': 0, 'score': 0.9999, 'text': '你好'},
+#           {'corpus_id': 3, 'score': 0.5694, 'text': '人很好看'}]} 
+```
+"""
+
+## 3. 支持的句向量权重
 | 模型分类| 模型名称 | 权重来源| 权重链接 | 备注(若有)|
 | ----- | ----- | ----- | ----- | ----- |
 | simbert|[simbert](https://github.com/ZhuiyiTechnology/simbert) | 追一科技|[`Tongjilibo/simbert-chinese-base`](https://huggingface.co/Tongjilibo/simbert-chinese-base), [`Tongjilibo/simbert-chinese-small`](https://huggingface.co/Tongjilibo/simbert-chinese-small), [`Tongjilibo/simbert-chinese-tiny`](https://huggingface.co/Tongjilibo/simbert-chinese-tiny) | |
@@ -39,18 +50,20 @@ pip install git+https://github.com/Tongjilibo/bert4vector
 |          | bge |BAAI| [`BAAI/bge-large-en-v1.5`](https://huggingface.co/BAAI/bge-large-en-v1.5), [`BAAI/bge-large-zh-v1.5`](https://huggingface.co/BAAI/bge-large-zh-v1.5), [`BAAI/bge-base-en-v1.5`](https://huggingface.co/BAAI/bge-base-en-v1.5), [`BAAI/bge-base-zh-v1.5`](https://huggingface.co/BAAI/bge-base-zh-v1.5), [`BAAI/bge-small-en-v1.5`](https://huggingface.co/BAAI/bge-small-en-v1.5), [`BAAI/bge-small-zh-v1.5`](https://huggingface.co/BAAI/bge-small-zh-v1.5) | [`bge-large-en-v1.5`](https://huggingface.co/Tongjilibo/bert4torch_config/tree/main/bge-large-en-v1.5), [`bge-large-zh-v1.5`](https://huggingface.co/Tongjilibo/bert4torch_config/tree/main/bge-large-zh-v1.5), [`bge-base-en-v1.5`](https://huggingface.co/Tongjilibo/bert4torch_config/tree/main/bge-base-en-v1.5), [`bge-base-zh-v1.5`](https://huggingface.co/Tongjilibo/bert4torch_config/tree/main/bge-base-zh-v1.5), [`bge-small-en-v1.5`](https://huggingface.co/Tongjilibo/bert4torch_config/tree/main/bge-small-en-v1.5), [`bge-small-zh-v1.5`](https://huggingface.co/Tongjilibo/bert4torch_config/tree/main/bge-small-zh-v1.5)|
 |          | gte |thenlper| [`thenlper/gte-large-zh`](https://huggingface.co/thenlper/gte-large-zh), [`thenlper/gte-base-zh`](https://huggingface.co/thenlper/gte-base-zh) |[`gte-base-zh`](https://huggingface.co/Tongjilibo/bert4torch_config/tree/main/gte-base-zh), [`gte-large-zh`](https://huggingface.co/Tongjilibo/bert4torch_config/tree/main/gte-large-zh)|
 
-## 3. 版本历史
+## 4. 版本历史
 
 |更新日期| bert4vector | 版本说明 |
 |------| ---------------- |----------- |
+|20240628| 0.0.3   |增加多种字面召回，增加api接口部署|
 |20240131| 0.0.2.post2   |去除对bert4torch的版本依赖|
 |20231228| 0.0.2        |初始版本，支持内存和faiss模式|
 
-## 4. 更新历史：
+## 5. 更新历史：
 
+- **20240628**：增加多种字面召回，增加api接口部署
 - **20231228**：初始版本，支持内存和faiss模式
 
 
-## 5. Reference
+## 6. Reference
 - [similarities](https://github.com/shibing624/similarities)
 - [bert4vec](https://github.com/zejunwang1/bert4vec)
