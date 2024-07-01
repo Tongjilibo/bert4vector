@@ -69,7 +69,6 @@ server = SimilaritySever('/data/pretrain_ckpt/embedding/BAAI--bge-base-zh-v1.5')
 server.run(port=port)
 # 接口调用可以参考'./examples/api.py'
 ```
-"""
 
 ## 3. 支持的句向量权重
 | 模型分类| 模型名称 | 权重来源| 权重链接 | 备注(若有)|
