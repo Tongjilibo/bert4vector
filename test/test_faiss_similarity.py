@@ -5,7 +5,7 @@ import pytest
 
 
 @pytest.mark.parametrize("model_dir", ['/data/pretrain_ckpt/simbert/sushen@simbert_chinese_tiny'])
-def encode(model_dir):
+def test_encode(model_dir):
     model = FaissSimilarity(model_dir)
     sentences = ['喜欢打篮球的男生喜欢什么样的女生', '西安下雪了？是不是很冷啊?', '第一次去见女朋友父母该如何表现？', '小蝌蚪找妈妈怎么样', 
                 '给我推荐一款红色的车', '我喜欢北京']
@@ -16,7 +16,7 @@ def encode(model_dir):
     print(vecs)
 
 @pytest.mark.parametrize("model_dir", ['/data/pretrain_ckpt/simbert/sushen@simbert_chinese_tiny'])
-def search(model_dir):
+def test_search(model_dir):
     model = FaissSimilarity(model_dir)
     model.add_corpus(['你好', '我选你'])
     model.add_corpus(['天气不错', '人很好看'])
@@ -26,7 +26,7 @@ def search(model_dir):
     print(model.search(['你好', '天气晴']))
 
 @pytest.mark.parametrize("model_dir", ['/data/pretrain_ckpt/simbert/sushen@simbert_chinese_tiny'])
-def similarity(model_dir):
+def test_similarity(model_dir):
     text2vec = FaissSimilarity(model_dir)
     sent1 = ['喜欢打篮球的男生喜欢什么样的女生', '西安下雪了？是不是很冷啊?', '第一次去见女朋友父母该如何表现？', '小蝌蚪找妈妈怎么样', 
             '给我推荐一款红色的车', '我喜欢北京', 'That is a happy person']
@@ -39,6 +39,6 @@ def similarity(model_dir):
 
 if __name__ == '__main__':
     model_dir = '/data/pretrain_ckpt/simbert/sushen@simbert_chinese_tiny'
-    encode(model_dir)
-    similarity(model_dir)
-    search(model_dir)
+    test_encode(model_dir)
+    test_similarity(model_dir)
+    test_search(model_dir)

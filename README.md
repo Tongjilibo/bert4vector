@@ -80,6 +80,17 @@ server.run(port=port)
 |          | bge |BAAI| [`BAAI/bge-large-en-v1.5`](https://huggingface.co/BAAI/bge-large-en-v1.5), [`BAAI/bge-large-zh-v1.5`](https://huggingface.co/BAAI/bge-large-zh-v1.5), [`BAAI/bge-base-en-v1.5`](https://huggingface.co/BAAI/bge-base-en-v1.5), [`BAAI/bge-base-zh-v1.5`](https://huggingface.co/BAAI/bge-base-zh-v1.5), [`BAAI/bge-small-en-v1.5`](https://huggingface.co/BAAI/bge-small-en-v1.5), [`BAAI/bge-small-zh-v1.5`](https://huggingface.co/BAAI/bge-small-zh-v1.5) | [`bge-large-en-v1.5`](https://huggingface.co/Tongjilibo/bert4torch_config/tree/main/bge-large-en-v1.5), [`bge-large-zh-v1.5`](https://huggingface.co/Tongjilibo/bert4torch_config/tree/main/bge-large-zh-v1.5), [`bge-base-en-v1.5`](https://huggingface.co/Tongjilibo/bert4torch_config/tree/main/bge-base-en-v1.5), [`bge-base-zh-v1.5`](https://huggingface.co/Tongjilibo/bert4torch_config/tree/main/bge-base-zh-v1.5), [`bge-small-en-v1.5`](https://huggingface.co/Tongjilibo/bert4torch_config/tree/main/bge-small-en-v1.5), [`bge-small-zh-v1.5`](https://huggingface.co/Tongjilibo/bert4torch_config/tree/main/bge-small-zh-v1.5)|
 |          | gte |thenlper| [`thenlper/gte-large-zh`](https://huggingface.co/thenlper/gte-large-zh), [`thenlper/gte-base-zh`](https://huggingface.co/thenlper/gte-base-zh) |[`gte-base-zh`](https://huggingface.co/Tongjilibo/bert4torch_config/tree/main/gte-base-zh), [`gte-large-zh`](https://huggingface.co/Tongjilibo/bert4torch_config/tree/main/gte-large-zh)|
 
+*注：
+1. `高亮格式`(如`Tongjilibo/simbert-chinese-small`)的表示可直接联网下载
+2. 国内镜像网站加速下载
+   - `HF_ENDPOINT=https://hf-mirror.com python your_script.py`
+   - `export HF_ENDPOINT=https://hf-mirror.com`后再执行python代码
+   - 在python代码开头如下设置
+    ```python
+    import os
+    os.environ['HF_ENDPOINT'] = "https://hf-mirror.com"
+    ```
+
 ## 4. 版本历史
 
 |更新日期| bert4vector | 版本说明 |

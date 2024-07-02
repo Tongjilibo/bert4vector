@@ -12,7 +12,7 @@ import pytest
                                            TfidfSimilarity,
                                            BM25Similarity,
                                            CilinSimilarity])
-def literal_similarity(text2vecClass):
+def test_literal_similarity(text2vecClass):
     '''最长公共子序列相似度'''
     text2vec = text2vecClass()
     sent1 = ['喜欢打篮球的男生喜欢什么样的女生', '西安下雪了？是不是很冷啊?', '第一次去见女朋友父母该如何表现？', '小蝌蚪找妈妈怎么样', 
@@ -32,4 +32,4 @@ def literal_similarity(text2vecClass):
 
 
 if __name__ == '__main__':
-    literal_similarity(CilinSimilarity)
+    test_literal_similarity(CilinSimilarity)
