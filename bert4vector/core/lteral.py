@@ -8,7 +8,7 @@ from typing import List, Union, Dict
 import numpy as np
 from loguru import logger
 from .base import PairedSimilarity, VectorSimilarity
-from ..snippets.distance import string_hash, hamming_distance, longest_common_substring_size
+from ..snippets.distance import string_hash, hamming_distance, longest_common_substring_size, longest_common_subsequence_size
 from ..snippets.rank_bm25 import BM25Okapi
 from ..snippets.tfidf import TFIDF, load_stopwords, default_stopwords_file
 from ..snippets.util import cos_sim, semantic_search
@@ -19,6 +19,7 @@ pwd_path = os.path.abspath(os.path.dirname(__file__))
 __all__ = [
     'SameCharsSimilarity',
     'LongestCommonSubstringSimilarity',
+    'LongestCommonSubsequenceSimilarity',
     'HownetSimilarity',
     'SimHashSimilarity',
     'TfidfSimilarity',
@@ -92,6 +93,26 @@ class LongestCommonSubstringSimilarity(PairedSimilarity):
         if not emb1 or not emb2:
             return 0.0
         same_size = longest_common_substring_size(emb1, emb2)
+        same_score = self.min_same_len_score if same_size > self.min_same_len else 0.0
+        # 取最长公共子串/多个序列长度的最大值
+        similarity_score = max(same_size / len(emb1), same_size / len(emb2), same_score)
+        return similarity_score
+    
+
+class LongestCommonSubsequenceSimilarity(PairedSimilarity):
+    """基于最长公共子串占比计算相似度
+    """
+    def __init__(self, corpus: List[str] = None,
+                 min_same_len: int = 70, 
+                 min_same_len_score: float = 0.9):
+        super().__init__(corpus=corpus, matching_type='LongestCommonSubsequenceSimilarity')
+        self.min_same_len = min_same_len
+        self.min_same_len_score = min_same_len_score
+
+    def calc_pair_sim(self, emb1:str, emb2:str, **kwargs):
+        if not emb1 or not emb2:
+            return 0.0
+        same_size = longest_common_subsequence_size(emb1, emb2)
         same_score = self.min_same_len_score if same_size > self.min_same_len else 0.0
         # 取最长公共子串/多个序列长度的最大值
         similarity_score = max(same_size / len(emb1), same_size / len(emb2), same_score)

@@ -2,6 +2,7 @@
 '''
 from bert4vector.core import SameCharsSimilarity, LongestCommonSubstringSimilarity, CilinSimilarity
 from bert4vector.core import HownetSimilarity, SimHashSimilarity, TfidfSimilarity, BM25Similarity
+from bert4vector.core import LongestCommonSubsequenceSimilarity
 import pytest
 
 
@@ -11,7 +12,8 @@ import pytest
                                            SimHashSimilarity,
                                            TfidfSimilarity,
                                            BM25Similarity,
-                                           CilinSimilarity])
+                                           CilinSimilarity,
+                                           LongestCommonSubsequenceSimilarity])
 def test_literal_similarity(text2vecClass):
     '''最长公共子序列相似度'''
     text2vec = text2vecClass()
@@ -23,7 +25,7 @@ def test_literal_similarity(text2vecClass):
     similarity = text2vec.similarity(sent1, sent2)
     print(similarity)
 
-    text2vec.add_corpus(['你好', '我选你'])
+    text2vec.add_corpus(['你们好', '我选你'])
     text2vec.add_corpus(['天气不错', '人很好看'])
     text2vec.save(corpus_path='../cache/corpus.jsonl', emb_path='../cache/emb.jsonl')
     text2vec.load(corpus_path='../cache/corpus.jsonl', emb_path='../cache/emb.jsonl')
@@ -32,4 +34,4 @@ def test_literal_similarity(text2vecClass):
 
 
 if __name__ == '__main__':
-    test_literal_similarity(CilinSimilarity)
+    test_literal_similarity(LongestCommonSubstringSimilarity)

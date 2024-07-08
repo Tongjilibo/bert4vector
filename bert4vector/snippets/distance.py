@@ -112,7 +112,7 @@ def is_str_match(str1, str2, threshold=1.0):
         return (1.0 - edit_distance(str1, str2)) >= threshold
 
 
-def longest_common_substring_size(str1, str2):
+def longest_common_substring_size(str1:str, str2:str):
     """最长公共子串长度"""
     sq = SequenceMatcher(None, str1, str2)
     match = sq.find_longest_match(0, len(str1), 0, len(str2))
@@ -124,6 +124,26 @@ def longest_common_substring_ratio(str1, str2):
     sq = SequenceMatcher(None, str1, str2)
     match = sq.find_longest_match(0, len(str1), 0, len(str2))
     return try_divide(match.size, min(len(str1), len(str2)))
+
+
+def longest_common_subsequence_size(text1: str, text2: str) -> int:
+    '''最长公共子序列'''
+    m, n = len(text1), len(text2)
+    # dp[i][j] 表示 text1[..i] 和 text2[..j] 的最长公共子序列的长度
+    dp = [[0] * (n + 1) for _ in range(m + 1)]
+    for i in range(m):
+        for j in range(n):
+            if text1[i] == text2[j]:
+                # 如果 text1[i] == text2[j] ，则必定选择这两个字符作为最长公共子序列的结尾，
+                # 那么状态 dp[i + 1][j + 1] 可由 dp[i][j] + 1 转移而来
+                dp[i + 1][j + 1] = dp[i][j] + 1
+            else:
+                # 如果 text1[i] != text2[j] ，
+                # 则 dp[i + 1][j + 1] 只能从 dp[i + 1][j] 和 dp[i][j + 1] 直接转移
+                dp[i + 1][j + 1] = max(dp[i + 1][j], dp[i][j + 1])
+
+    # dp[m][n] 就是 text1 和 text2 的最长公共子序列的长度
+    return dp[m][n]
 
 
 def jaccard_coef(A, B):
