@@ -5,7 +5,6 @@ import json
 from loguru import logger
 from bert4vector.core import BertSimilarity, FaissSimilarity, SameCharsSimilarity, LongestCommonSubstringSimilarity
 from bert4vector.core import HownetSimilarity, SimHashSimilarity, TfidfSimilarity, BM25Similarity, CilinSimilarity
-from bert4vector.snippets import cos_sim
 import traceback
 from torch4keras.snippets import is_package_available
 if is_package_available('fastapi'):
