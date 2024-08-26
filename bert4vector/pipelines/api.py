@@ -283,6 +283,10 @@ class SimilarityClientRequest:
                 'encode_kwargs': encode_kwargs or dict()}
         return self._post("add_corpus", data)
 
+    def reset(self, name:str='default'):
+        data = {"name": name}
+        return self._post("reset", data)
+
 
 class SimilarityClientAiohttp:
     def __init__(self, base_url: str = "http://0.0.0.0:8001", timeout: int = 30):
@@ -349,3 +353,7 @@ class SimilarityClientAiohttp:
                 'name':name, 
                 'encode_kwargs': encode_kwargs or dict()}
         return await self._post("add_corpus", data)
+    
+    async def reset(self, name:str='default'):
+        data = {"name": name}
+        return await self._post("reset", data)
