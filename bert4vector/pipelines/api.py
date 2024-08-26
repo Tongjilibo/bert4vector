@@ -18,6 +18,8 @@ else:
     BaseModel, Field = object, object
 
 
+class Reset(BaseModel):
+    name:str ='default'
 class Encode(BaseModel):
     query: Union[str, List]
     encode_kwargs:dict = {}
@@ -98,6 +100,7 @@ class SimilaritySever:
         router.add_api_route('/', methods=['GET'], endpoint=self.index)
         router.add_api_route('/summary', methods=['GET'], endpoint=self.summary)  # 查询语料库目前分布
         router.add_api_route('/add_corpus', methods=['POST'], endpoint=self.add_corpus)  # 添加语料库
+        router.add_api_route('/reset', methods=['POST'], endpoint=self.reset)  # 查询语料库目前分布
         router.add_api_route('/encode', methods=['POST'], endpoint=self.encode)  # 获取句向量
         router.add_api_route('/similarity', methods=['POST'], endpoint=self.similarity)  # 计算句子相似度
         router.add_api_route('/search', methods=['POST'], endpoint=self.search)  # 从语料库召回topk相似句
@@ -105,6 +108,12 @@ class SimilaritySever:
    
     async def index(self):
         return {"message": "index, docs url: /docs"}
+
+    async def reset(self, req: Reset):
+        '''重置某个子语料库'''
+        self.model.reset(req.name)
+        msg = f'Successfully reset {req.name}.'
+        return JSONResponse({'status': True, 'msg': msg}, status_code=status.HTTP_200_OK)
 
     async def encode(self, req: Encode):
         '''获取query的embedding
