@@ -1,6 +1,6 @@
 '''把向量检索部署为api服务
 '''
-from typing import Optional, List, Union, Dict, Literal
+from typing import Optional, List, Union, Dict, Literal, Iterable
 import json
 from loguru import logger
 from bert4vector.core import BertSimilarity, FaissSimilarity, SameCharsSimilarity, LongestCommonSubstringSimilarity
@@ -25,9 +25,15 @@ class Encode(BaseModel):
     encode_kwargs:dict = {}
 
 class Corpus(BaseModel):
-    texts: Union[str, List]
+    corpus: List[str]
     name: str = 'default'
+    corpus_property: List[dict]=None
     encode_kwargs:dict = {}
+
+class DeleteCorpus(BaseModel):
+    corpus: List[str] = None
+    corpus_ids: List[int] = None
+    name: str = 'default'
 
 class Similarity(BaseModel):
     query1: Union[str, List]
@@ -40,6 +46,7 @@ class Search(BaseModel):
     topk: int = 10
     score_function: str = "cos_sim"
     name: str = 'default'
+    return_dict: bool = True
     encode_kwargs:dict = {}
 
 
@@ -100,6 +107,7 @@ class SimilaritySever:
         router.add_api_route('/', methods=['GET'], endpoint=self.index)
         router.add_api_route('/summary', methods=['GET'], endpoint=self.summary)  # 查询语料库目前分布
         router.add_api_route('/add_corpus', methods=['POST'], endpoint=self.add_corpus)  # 添加语料库
+        router.add_api_route('/delete_corpus', methods=['POST'], endpoint=self.delete_corpus)  # 删除语料库
         router.add_api_route('/reset', methods=['POST'], endpoint=self.reset)  # 查询语料库目前分布
         router.add_api_route('/encode', methods=['POST'], endpoint=self.encode)  # 获取句向量
         router.add_api_route('/similarity', methods=['POST'], endpoint=self.similarity)  # 计算句子相似度
@@ -164,20 +172,40 @@ class SimilaritySever:
     async def summary(self, random_sample:bool=False, sample_count:int=2):
         return self.model.summary(random_sample, sample_count, verbose=0)
 
+    async def delete_corpus(self, req: DeleteCorpus):
+        '''删除部分语料库
+        ## Example
+        ### 入参
+        ```json
+        {
+            "corpus": ["你好啊", "天气不错", "我想去北京"]
+        }
+        ```
+        '''
+        try:
+            delete_count = self.model.delete_corpus(req.corpus, req.corpus_ids, name=req.name)
+            msg = f"Successfully delete {delete_count} docs from corpus `{req.name}` and size={len(self.model.corpus[req.name])}, all corpus size={len(self.model)}"
+            logger.info(msg)
+            response = {'status': True, 'msg': msg}
+            return JSONResponse(response, status_code=status.HTTP_200_OK)
+        except:
+            msg = traceback.format_exc()
+            logger.error(msg)
+            return JSONResponse({'status': False, 'msg': msg}, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     async def add_corpus(self, req: Corpus):
         '''添加语料库
         ## Example
         ### 入参
         ```json
         {
-            "texts": ["你好啊", "天气不错", "我想去北京"]
+            "corpus": ["你好啊", "天气不错", "我想去北京"]
         }
         ```
         '''
         try:
-            q = req.texts
-            self.model.add_corpus(q, name=req.name, **req.encode_kwargs)
-            msg = f"Successfully add {len(q)} texts for corpus `{req.name}` and size={len(self.model.corpus[req.name])}, all corpus size={len(self.model)}"
+            self.model.add_corpus(req.corpus, name=req.name, corpus_property=req.corpus_property, **req.encode_kwargs)
+            msg = f"Successfully add {len(req.corpus)} docs for corpus `{req.name}` and size={len(self.model.corpus[req.name])}, all corpus size={len(self.model)}"
             logger.info(msg)
             response = {'status': True, 'msg': msg}
             return JSONResponse(response, status_code=status.HTTP_200_OK)
@@ -202,8 +230,8 @@ class SimilaritySever:
             return JSONResponse({'status': False, 'msg': msg}, status_code=status.HTTP_400_BAD_REQUEST)
         try:
             query = req.query
-            result = self.model.search(query, topk=req.topk, score_function=req.score_function, name=req.name, **req.encode_kwargs)
-            msg = f"Successfully search from {req.name} done, query:{query}, result: {result}"
+            result = self.model.search(query, topk=req.topk, score_function=req.score_function, name=req.name, return_dict=req.return_dict, **req.encode_kwargs)
+            msg = f"Successfully search from corpus `{req.name}`, query:{query}, result: {result}"
             logger.info(msg)
             result_dict = {'result': result, 'status': True, 'msg': msg}
             return JSONResponse(result_dict, status_code=status.HTTP_200_OK)
@@ -269,19 +297,30 @@ class SimilarityClientRequest:
 
     def search(self, query: Union[str, List], topk: int = 10,
                score_function: str = "cos_sim", name: str = 'default',
-               encode_kwargs:dict = None):
+               return_dict:bool=True, encode_kwargs:dict = None):
         data = {"query": query, 
                 'topk': topk,
                 'score_function': score_function,
                 'name': name,
+                'return_dict': return_dict,
                 'encode_kwargs': encode_kwargs or dict()}
         return self._post("search", data)
     
-    def add_corpus(self, texts: Union[str, List], name:str='default', encode_kwargs:dict = None):
-        data = {"texts": texts, 
+    def add_corpus(self, corpus: List[str], name:str='default', corpus_property:List[dict]=None, encode_kwargs:dict = None):
+        data = {"corpus": corpus, 
                 'name':name, 
                 'encode_kwargs': encode_kwargs or dict()}
+        if corpus_property:
+            data['corpus_property'] = corpus_property
         return self._post("add_corpus", data)
+
+    def delete_corpus(self, corpus: List[str]=None, corpus_ids:List[int]=None, name:str='default'):
+        data = {'name': name}
+        if corpus:
+            data["corpus"] = corpus
+        if corpus_ids:
+            data["corpus_ids"] = corpus_ids
+        return self._post("delete_corpus", data)
 
     def reset(self, name:str='default'):
         data = {"name": name}
@@ -340,19 +379,30 @@ class SimilarityClientAiohttp:
 
     async def search(self, query: Union[str, List], topk: int = 10,
                score_function: str = "cos_sim", name: str = 'default',
-               encode_kwargs:dict = None):
+               return_dict:bool=True, encode_kwargs:dict = None):
         data = {"query": query, 
                 'topk': topk,
                 'score_function': score_function,
                 'name': name,
+                'return_dict': return_dict,
                 'encode_kwargs': encode_kwargs or dict()}
         return await self._post("search", data)
     
-    async def add_corpus(self, texts: Union[str, List], name:str='default', encode_kwargs:dict = None):
-        data = {"texts": texts, 
+    async def add_corpus(self, corpus: List[str], name:str='default', corpus_property:List[dict]=None, encode_kwargs:dict=None):
+        data = {"corpus": corpus, 
                 'name':name, 
                 'encode_kwargs': encode_kwargs or dict()}
+        if corpus_property:
+            data['corpus_property'] = corpus_property
         return await self._post("add_corpus", data)
+    
+    async def delete_corpus(self, corpus: List[str]=None, corpus_ids:List[int]=None, name:str='default'):
+        data = {'name': name}
+        if corpus:
+            data["corpus"] = corpus
+        if corpus_ids:
+            data["corpus_ids"] = corpus_ids
+        return await self._post("delete_corpus", data)
     
     async def reset(self, name:str='default'):
         data = {"name": name}

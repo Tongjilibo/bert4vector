@@ -5,7 +5,7 @@ from bert4vector.pipelines import SimilaritySever, SimilarityClientRequest, Simi
 
 def start_server(port):
     # server端
-    server = SimilaritySever('/data/pretrain_ckpt/embedding/BAAI--bge-base-zh-v1.5')
+    server = SimilaritySever('/data/pretrain_ckpt/BAAI/bge-base-zh-v1.5')
     server.run(port=port)
 
 def start_client_request(port):
@@ -15,6 +15,9 @@ def start_client_request(port):
     print(client.encode('你好'))
     print(client.similarity(query1='你好', query2='你好啊'))
     print(client.search('你好'))
+    print(client.delete_corpus(['天气不错']))
+    print(client.summary())
+    print(client.reset())
     print(client.summary())
 
 async def start_client_aiohttp(port):
@@ -24,13 +27,16 @@ async def start_client_aiohttp(port):
     print(await client.encode('你好'))
     print(await client.similarity(query1='你好', query2='你好啊'))
     print(await client.search('你好'))
+    print(await client.delete_corpus(['天气不错']))
+    print(await client.summary())
+    print(await client.reset())
     print(await client.summary())
 
 
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--port', default=8001)
+    parser.add_argument('--port', default=9000)
     parser.add_argument('--mode', default='server', choices=['server', 'client_request', 'client_aiohttp'])
     args = parser.parse_args()
     port = int(args.port)

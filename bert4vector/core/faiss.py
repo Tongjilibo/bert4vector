@@ -87,7 +87,7 @@ class FaissSimilarity(BertSimilarity):
                 name = file_name.replace(file + '.', '')
                 self.indexes[name] = faiss.read_index(os.path.join(path, file_name))
 
-    def search(self, queries: Union[str, List[str]], topk:int=10, name:str='default', **kwargs) -> dict:
+    def search(self, queries: Union[str, List[str]], topk:int=10, name:str='default', return_dict:bool=True, **kwargs) -> dict:
         ''' 在候选语料中寻找和query的向量最近似的topk个结果
         :param queries: query语句/语句列表/语句字典
         :param topk: 对每条query需要召回topk条
@@ -114,6 +114,6 @@ class FaissSimilarity(BertSimilarity):
             for j, k in zip(i, s):
                 if j < 0:
                     continue
-                items.append({'text': self.corpus[name][j], 'corpus_id': j, 'score': k})
+                items.append({**self.corpus[name][j], 'corpus_id': j, 'score': k})
             results[queries[idx]] = items
-        return results
+        return self._get_search_result(results, return_dict)

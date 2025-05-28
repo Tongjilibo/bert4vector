@@ -10,6 +10,9 @@ from pathlib import Path
 import numpy as np
 
 
+SEARCH_RES_TYPE = Union[List, Dict[str, List]]  # search返回的数据类型
+
+
 class SimilarityBase:
     """基类
     """
@@ -73,13 +76,49 @@ class SimilarityBase:
             print_table(table_format)
         return json_format
     
-    def add_corpus(self, corpus: List[str], name:str='default', **kwargs):
+    def delete_corpus(self, corpus:List[str]=None, corpus_ids:List[int]=None, name:str='default', **kwargs):
+        '''按照corpus或者corpus_ids来删除部分语料，包含corpus语料和embedding
+        :param corpus: 待删除语料的list
+        :param corpus_ids: 待删除语料的id
+        :param name: sub_corpus名
+        '''
+        assert corpus is not None or corpus_ids is not None, 'Args `corpus` and `corpus_ids` can not be None at the same time'
+
+        if name not in self.corpus:
+            logger.error(f'Args `name`={name} not in {list(self.corpus.keys())}')
+            return
+        
+        delete_count = 0
+        if corpus:
+            corpus = set(corpus)
+            del_id_set = set()
+            for id, text in self.corpus[name].items():
+                if text['text'] in corpus:
+                    del_id_set.add(id)
+                    delete_count += 1
+        elif corpus_ids:
+            del_id_set = set(corpus_ids)
+            delete_count += len(del_id_set)
+
+        sub_corpus = [(k,v) for k, v in self.corpus[name].items() if k not in del_id_set]
+        sub_corpus = sorted(sub_corpus, key=lambda x: x[0])
+        self.corpus[name] = {id:item for id, (_, item) in enumerate(sub_corpus)}
+        self.corpus_embeddings[name] = [v for i, v in enumerate(self.corpus_embeddings[name]) if i not in del_id_set]
+        logger.info(f'Successfuly delete {delete_count} docs from corpus `{name}`')
+        return delete_count
+
+    def _get_corpus_text(self, name:str='default') -> list:
+        '''获取语料列表'''
+        return [item['text'] for item in self.corpus[name].values()]
+
+    def add_corpus(self, corpus: List[str], name:str='default', corpus_property:List[dict]=None, **kwargs):
         """ 使用文档chunk来转为向量
         :param corpus: 语料的list
         :param name: sub_corpus名
+        :param corpus_property: 语料属性，由于corpus是去重时候会结果不同，为了防止和外部属性对应不上，这里可以返回
         """
         # 添加语料并放到语料库
-        new_corpus = self._add_corpus(corpus=corpus, name=name)
+        new_corpus = self._add_corpus(corpus=corpus, name=name, corpus_property=corpus_property)
         
         # 转向量并放到向量库
         self._add_embedding(new_corpus=new_corpus, name=name, **kwargs)
@@ -90,8 +129,16 @@ class SimilarityBase:
             msg += f", emb dim: {len(self.corpus_embeddings[name][0])}"
         logger.info(msg)
 
-    def _add_corpus(self, corpus: List[str], name:str='default', **kwargs):
+    def _add_corpus(self, corpus: List[str], name:str='default', corpus_property:List[dict]=None, **kwargs):
         '''添加语料并放到语料库'''
+        assert isinstance(corpus, (list, tuple, set)) and all([isinstance(c, str) for c in corpus]), \
+            'Args `corpus` only support List[str] format'
+        if corpus_property:
+            assert isinstance(corpus_property, (list, tuple, set)) and all([isinstance(c, dict) for c in corpus_property]), \
+                'Args `corpus_property` only support List[dict] format'
+            assert len(corpus)==len(corpus_property), \
+                f'Not same length: len(corpus)={len(corpus)} <> len(corpus_property)={len(corpus_property)}'
+
         new_corpus, new_corpus_set = {}, set()
         if name not in self.corpus:
             self.corpus[name] = {}
@@ -99,11 +146,17 @@ class SimilarityBase:
         
         # 添加text到语料库
         id = len(self.corpus[name])
-        sub_corpus_values = set(self.corpus[name].values())
-        for doc in corpus:
+        sub_corpus_values = self._get_corpus_text(name)
+        for i, doc in enumerate(corpus):
+            # 在存量corpus中，或在新的语料中，则不添加
             if (doc in sub_corpus_values) or (doc in new_corpus_set):
                 continue
-            new_corpus[id] = doc
+            new_corpus[id] = {'text': doc}
+            # 更新属性
+            if corpus_property:
+                if 'text' in corpus_property[i]:  # 防止重名
+                    corpus_property[i]['text_new'] = corpus_property[i].pop('text')
+                new_corpus[id].update(corpus_property[i])
             new_corpus_set.add(doc)
             id += 1
 
@@ -208,6 +261,13 @@ class SimilarityBase:
                     self.corpus[name] = {}
                 self.corpus[name][json_obj['id']] = json_obj['text']
 
+    @staticmethod
+    def _get_search_result(result:Dict[str, list], return_dict:bool=True):
+        '''返回字典还是列表'''
+        if return_dict:
+            return result
+        return [i for i in result.values()]
+
 
 class PairedSimilarity(SimilarityBase):
     '''成对的texts组相似度计算'''
@@ -241,7 +301,7 @@ class PairedSimilarity(SimilarityBase):
         """Compute cosine distance between two texts."""
         return [1 - s for s in self.similarity(a, b)]
 
-    def search(self, queries: Union[str, List[str]], topk: int = 10, name:str='default') -> Dict[str, List]:
+    def search(self, queries: Union[str, List[str]], topk: int = 10, name:str='default', return_dict:bool=True) -> SEARCH_RES_TYPE:
         """Find the topn most similar texts to the query against the corpus."""
         if isinstance(queries, str) or not hasattr(queries, '__len__'):
             queries = [queries]
@@ -252,10 +312,10 @@ class PairedSimilarity(SimilarityBase):
             query_emb = self.encode(query)
             for (corpus_id, text), doc_emb in zip(self.corpus[name].items(), self.corpus_embeddings[name]):
                 score = self.similarity(query_emb, doc_emb)[0]
-                q_res.append({'text': text, 'corpus_id': corpus_id, 'score': score})
+                q_res.append({**text, 'corpus_id': corpus_id, 'score': score})
             q_res.sort(key=lambda x: x['score'], reverse=True)
             result[query] = q_res[:topk]
-        return result
+        return self._get_search_result(result, return_dict)
     
 
 class VectorSimilarity(SimilarityBase):
@@ -285,7 +345,7 @@ class VectorSimilarity(SimilarityBase):
         """计算两组texts之间的cos距离"""
         return 1 - self.similarity(a, b)
 
-    def search(self, queries: Union[str, List[str]], topk:int=10, score_function:str="cos_sim", name:str='default', **encode_kwargs) -> Dict[str, List]:
+    def search(self, queries: Union[str, List[str]], topk:int=10, score_function:str="cos_sim", name:str='default', return_dict:bool=True, **encode_kwargs) -> SEARCH_RES_TYPE:
         """ 在候选语料中寻找和query的向量最近似的topk个结果
         :param queries:str or list of str
         :param topk: int
@@ -309,9 +369,9 @@ class VectorSimilarity(SimilarityBase):
             items = []
             for hit in hits[0:topk]:
                 corpus_id = hit['corpus_id']
-                items.append({**{'text': self.corpus[name][corpus_id]}, **hit})
+                items.append({**self.corpus[name][corpus_id], **hit})
             result[queries[idx]] = items
-        return result
+        return self._get_search_result(result, return_dict)
 
     def _get_query_emb(self, queries:Union[str, List[str]], **encode_kwargs):
         '''获取query的句向量'''

@@ -250,13 +250,13 @@ class BM25Similarity(PairedSimilarity):
 
     def _add_embedding(self, new_corpus:Dict[int, str], name:str='default', **kwargs):
         """build bm25 model."""
-        corpus_texts = list(self.corpus[name].values())
+        corpus_texts = self._get_corpus_text(name)
         corpus_seg = [self.jieba.lcut(d) for d in corpus_texts]
         corpus_seg = [[w for w in doc if (w.strip().lower() not in self.default_stopwords) and
                        len(w.strip()) > 0] for doc in corpus_seg]
         self.bm25[name] = BM25Okapi(corpus_seg)
 
-    def search(self, queries: Union[str, List[str]], topk: int = 10, name:str='default') -> Dict[str, List]:
+    def search(self, queries: Union[str, List[str]], topk: int = 10, name:str='default', return_dict:bool=True) -> Dict[str, List]:
         if name not in self.bm25:
             self._add_embedding(name=name)
         if isinstance(queries, str):
@@ -265,10 +265,10 @@ class BM25Similarity(PairedSimilarity):
         for query in queries:
             tokens = self.jieba.lcut(query)
             scores = self.bm25[name].get_scores(tokens)
-            q_res = [{'text': self.corpus[name][corpus_id], 'corpus_id': corpus_id, 'score': score} for corpus_id, score in enumerate(scores)]
+            q_res = [{**self.corpus[name][corpus_id], 'corpus_id': corpus_id, 'score': score} for corpus_id, score in enumerate(scores)]
             q_res = sorted(q_res, key=lambda x: x['score'], reverse=True)[:topk]
             result[query] = q_res
-        return result
+        return self._get_search_result(result, return_dict)
 
 
 class CilinSimilarity(PairedSimilarity):

@@ -20,7 +20,8 @@ def search(model_dir):
     model.save(corpus_path='../cache/corpus.jsonl', emb_path='../cache/emb.index')
     model.load(corpus_path='../cache/corpus.jsonl', emb_path='../cache/emb.index')
     print(model.search('你好'))
-    print(model.search(['你好', '天气晴']))
+    print(model.search(['你好', '天气晴'], return_dict=False))
+    model.delete_corpus(['我选你', '人很好看'])
 
 def similarity(model_dir):
     text2vec = BertSimilarity(model_dir)
@@ -34,7 +35,7 @@ def similarity(model_dir):
 
 
 if __name__ == '__main__':
-    model_dir = '/data/pretrain_ckpt/simbert/sushen@simbert_chinese_tiny'
+    model_dir = '/data/pretrain_ckpt/Tongjilibo/simbert_chinese_tiny'
     encode(model_dir)
     search(model_dir)
     similarity(model_dir)
