@@ -1,5 +1,6 @@
 from typing import List, Union, Dict, Literal
 from .base import VectorSimilarity
+from torch4keras.snippets import is_package_available
 
 
 class BertSimilarity(VectorSimilarity):
@@ -22,7 +23,7 @@ class BertSimilarity(VectorSimilarity):
     ... #           {'corpus_id': 3, 'score': 0.5694, 'text': '人很好看'}]} 
     ```
     """
-    def __init__(self, model_name_or_path:str, model_type:Literal['bert4torch', 'sentence_transformers']='bert4torch', 
+    def __init__(self, model_name_or_path:str, model_type:Literal['bert4torch', 'sentence_transformers']=None, 
                  corpus: List[str] = None, matching_type:str='BertSimilarity', **model_config):
         self.model_type = model_type
         self.model = self.build_model(model_name_or_path, **model_config)
@@ -30,15 +31,30 @@ class BertSimilarity(VectorSimilarity):
         self.emb_path = "corpus_emb.jsonl"
 
     def build_model(self, model_name_or_path, **model_config):
-        '''初始化模型'''
-        if self.model_type == 'bert4torch':
+        '''初始化模型
+        由于bert4torch支持的Embedding有限，因此也要兼容sentence_transformers，也可以手动显式指定model_type
+        '''
+        if self.model_type is None:
+            if is_package_available('bert4torch'):
+                # 有bert4torch包，且权重有bert4torch_config配置文件，表示是bert4torch支持的模型
+                from bert4torch.pipelines import Text2Vec
+                from bert4torch.snippets import get_config_path
+                if get_config_path(model_name_or_path, allow_none=True):
+                    return Text2Vec(model_name_or_path, **model_config)
+            return self._get_sentence_transformers(model_name_or_path, **model_config)
+        elif self.model_type == 'bert4torch':
             from bert4torch.pipelines import Text2Vec
             return Text2Vec(model_name_or_path, **model_config)
         elif self.model_type == 'sentence_transformers':
-            from sentence_transformers import SentenceTransformer
-            return SentenceTransformer(model_name_or_path, **model_config)
+            return self._get_sentence_transformers(model_name_or_path, **model_config)
         else:
             raise ValueError(f'Args `model_type` {self.model_type} not supported')
+    
+    @staticmethod
+    def _get_sentence_transformers(model_name_or_path, **model_config):
+        '''从sentence_transformers加载'''
+        from sentence_transformers import SentenceTransformer
+        return SentenceTransformer(model_name_or_path, **model_config)
     
     def to(self, device):
         self.model.to(device)
@@ -49,12 +65,10 @@ class BertSimilarity(VectorSimilarity):
             sentences: Union[str, List[str]],
             batch_size: int = 8,
             show_progress_bar: bool = False,
-            pool_strategy=None,
-            custom_layer=None,
             convert_to_numpy: bool = True,
             convert_to_tensor: bool = False,
             normalize_embeddings: bool = False,
-            max_seq_length: int = None
+            **kwargs
     ):
         """ 把句子转换成向量
         Returns the embeddings for a batch of sentences.
@@ -74,12 +88,10 @@ class BertSimilarity(VectorSimilarity):
             sentences,
             batch_size=batch_size,
             show_progress_bar=show_progress_bar,
-            pool_strategy=pool_strategy,
-            custom_layer=custom_layer,
             convert_to_numpy=convert_to_numpy,
             convert_to_tensor=convert_to_tensor,
             normalize_embeddings=normalize_embeddings,
-            max_seq_length=max_seq_length
+            **kwargs
         )
     
     def _add_embedding(self, new_corpus: Dict[int, str], name:str='default', **encode_kwargs):

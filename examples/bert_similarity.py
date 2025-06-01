@@ -35,7 +35,8 @@ def similarity(model_dir):
 
 
 if __name__ == '__main__':
-    model_dir = '/data/pretrain_ckpt/Tongjilibo/simbert_chinese_tiny'
+    # model_dir = '/data/pretrain_ckpt/Tongjilibo/simbert_chinese_tiny'  # 调用bert4torch
+    model_dir = '/data/pretrain_ckpt/maidalun1020/bce-embedding-base_v1'  # 调用sentence_transformers
     encode(model_dir)
     search(model_dir)
     similarity(model_dir)
