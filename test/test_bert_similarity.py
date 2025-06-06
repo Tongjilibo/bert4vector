@@ -5,9 +5,10 @@ import pytest
 import os
 os.environ['HF_ENDPOINT'] = "https://hf-mirror.com"
 
-@pytest.mark.parametrize("model_dir", ['/data/pretrain_ckpt/simbert/sushen@simbert_chinese_tiny',
-                                       'Tongjilibo/simbert-chinese-tiny'
-                                       ])
+model_dir = ['/data/pretrain_ckpt/Tongjilibo/simbert_chinese_tiny']
+
+
+@pytest.mark.parametrize("model_dir", model_dir)
 def test_encode(model_dir):
     model = BertSimilarity(model_dir)
     sentences = ['喜欢打篮球的男生喜欢什么样的女生', '西安下雪了？是不是很冷啊?', '第一次去见女朋友父母该如何表现？', '小蝌蚪找妈妈怎么样', 
@@ -18,7 +19,7 @@ def test_encode(model_dir):
     print(vecs.shape)
     print(vecs)
 
-@pytest.mark.parametrize("model_dir", ['/data/pretrain_ckpt/simbert/sushen@simbert_chinese_tiny'])
+@pytest.mark.parametrize("model_dir", model_dir)
 def test_search(model_dir):
     model = BertSimilarity(model_dir)
     model.add_corpus(['你好', '我选你'])
@@ -28,7 +29,7 @@ def test_search(model_dir):
     print(model.search('你好'))
     print(model.search(['你好', '天气晴']))
 
-@pytest.mark.parametrize("model_dir", ['/data/pretrain_ckpt/simbert/sushen@simbert_chinese_tiny'])
+@pytest.mark.parametrize("model_dir", model_dir)
 def test_similarity(model_dir):
     text2vec = BertSimilarity(model_dir)
     sent1 = ['喜欢打篮球的男生喜欢什么样的女生', '西安下雪了？是不是很冷啊?', '第一次去见女朋友父母该如何表现？', '小蝌蚪找妈妈怎么样', 

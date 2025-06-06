@@ -1,6 +1,8 @@
 from typing import List, Union, Dict, Literal
 from .base import VectorSimilarity
 from torch4keras.snippets import is_package_available
+import numpy as np
+from bert4vector.snippets import torch_Tensor
 
 
 class BertSimilarity(VectorSimilarity):
@@ -69,7 +71,7 @@ class BertSimilarity(VectorSimilarity):
             convert_to_tensor: bool = False,
             normalize_embeddings: bool = False,
             **kwargs
-    ):
+    ) -> Union[List[torch_Tensor], np.ndarray, torch_Tensor]:
         """ 把句子转换成向量
         Returns the embeddings for a batch of sentences.
         

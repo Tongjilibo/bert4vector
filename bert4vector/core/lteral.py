@@ -122,7 +122,7 @@ class LongestCommonSubsequenceSimilarity(PairedSimilarity):
 class HownetSimilarity(PairedSimilarity):
     """计算两组texts之间的Hownet相似度
     """
-    default_hownet_path = os.path.join(pwd_path, '../config/hownet.txt')
+    default_hownet_path = os.path.join(os.path.dirname(pwd_path), 'config/hownet.txt')
 
     def __init__(self, corpus: List[str] = None, hownet_path: str = default_hownet_path, matching_type:str='HownetSimilarity'):
         # 加载Hownet语义词典
@@ -274,7 +274,7 @@ class BM25Similarity(PairedSimilarity):
 class CilinSimilarity(PairedSimilarity):
     """ 计算两组texts之间的Cilin相似度
     """
-    default_cilin_path = os.path.join(pwd_path, '../config/cilin.txt')
+    default_cilin_path = os.path.join(os.path.dirname(pwd_path), 'config/cilin.txt')
 
     def __init__(self, corpus: List[str] = None, matching_type:str='CilinSimilarity', cilin_path: str = default_cilin_path):
         super().__init__(corpus=corpus, matching_type=matching_type)
