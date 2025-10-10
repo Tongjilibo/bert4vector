@@ -1,7 +1,7 @@
 from typing import Optional, List, Union, Dict, Callable, Any
 import json
 from loguru import logger
-from bert4vector.core.base import SimilarityBase, VectorSimilarity, SEARCH_RES_TYPE
+from bert4vector.core.base import VectorSimilarity, AsyncVectorSimilarity, SEARCH_RES_TYPE
 import numpy as np
 from torch4keras.snippets import is_package_available
 from bert4vector.snippets import cos_sim, dot_score, semantic_search
@@ -111,7 +111,7 @@ class OpenaiSimilarityRequest(VectorSimilarity):
         return all_embeddings
     
 
-class OpenaiSimilarityAiohttp(SimilarityBase):
+class OpenaiSimilarityAiohttp(AsyncVectorSimilarity):
     """ 在内存中存储和检索向量，访问远程的模型
     :param model_url: 模型权重地址
     :param config_path: 权重的config地址
@@ -189,87 +189,3 @@ class OpenaiSimilarityAiohttp(SimilarityBase):
 
         return all_embeddings
     
-    async def add_corpus(self, corpus: List[str], name:str='default', corpus_property:List[dict]=None, **kwargs):
-        """ 使用文档chunk来转为向量
-        :param corpus: 语料的list
-        :param name: sub_corpus名
-        :param corpus_property: 语料属性，由于corpus是去重时候会结果不同，为了防止和外部属性对应不上，这里可以返回
-        """
-        # 添加语料并放到语料库
-        new_corpus = self._add_corpus(corpus=corpus, name=name, corpus_property=corpus_property)
-        
-        # 转向量并放到向量库
-        await self._add_embedding(corpus=[item['text'] for item in new_corpus.values()], name=name, **kwargs)
-
-        # log
-        msg = f"Add {len(new_corpus)} docs for `{name}`, total: {len(self.corpus[name])}"
-        if len(self.corpus_embeddings[name]) > 0:
-            msg += f", emb dim: {len(self.corpus_embeddings[name][0])}"
-        logger.info(msg)
-
-    async def _add_embedding(self, corpus:List[str], name:str='default', **encode_kwargs):
-        """ 使用文档chunk来转为向量
-
-        >>> encode_kwargs参数
-        :param batch_size: batch size for computing embeddings
-        :param normalize_embeddings: normalize embeddings before computing similarity
-        """
-        # 转向量并放到向量库
-        corpus_embeddings = await self.encode(corpus, convert_to_numpy=False, show_progress_bar=True, **encode_kwargs)
-        self.corpus_embeddings[name] = self.corpus_embeddings.get(name, []) + corpus_embeddings
-
-    async def similarity(self, a: Union[str, List[str]], b: Union[str, List[str]], score_function:str="cos_sim", **encode_kwargs):
-        """ 计算两组texts之间的向量相似度
-        :param a: list of str or str
-        :param b: list of str or str
-        :param score_function: function to compute similarity, default cos_sim
-        :param kwargs: additional arguments for the similarity function
-        :return: similarity score, torch.Tensor, Matrix with res[i][j] = cos_sim(a[i], b[j])
-        """
-        if score_function not in self.score_functions:
-            raise ValueError(f"score function: {score_function} must be either (cos_sim) for cosine similarity"
-                             " or (dot) for dot product")
-        score_function = self.score_functions[score_function]
-        text_emb1 = await self.encode(a, **encode_kwargs)
-        text_emb2 = await self.encode(b, **encode_kwargs)
-
-        return score_function(text_emb1, text_emb2)
-
-    async def distance(self, a: Union[str, List[str]], b: Union[str, List[str]]):
-        """计算两组texts之间的cos距离"""
-        return 1 - await self.similarity(a, b)
-
-    async def search(self, queries: Union[str, List[str]], topk:int=10, score_function:str="cos_sim", name:str='default', return_dict:bool=True, **encode_kwargs) -> SEARCH_RES_TYPE:
-        """ 在候选语料中寻找和query的向量最近似的topk个结果
-        :param queries:str or list of str
-        :param topk: int
-        :param score_function: function to compute similarity, default cos_sim
-        :param name: sub_corpus名
-        :param encode_kwargs: additional arguments for the similarity function
-
-        :return: Dict[str, Dict[str, float]], {query_id: {corpus_id: similarity_score}, ...}
-        """
-
-        queries, queries_embeddings = await self._get_query_emb(queries, **encode_kwargs)
-        if score_function not in self.score_functions:
-            raise ValueError(f"score function: {score_function} must be either (cos_sim) for cosine similarity"
-                             " or (dot) for dot product")
-        score_function = self.score_functions[score_function]
-        corpus_embeddings = np.array(self.corpus_embeddings[name], dtype=np.float32)
-        all_hits = semantic_search(queries_embeddings, corpus_embeddings, top_k=topk, score_function=score_function)
-        
-        result = {}
-        for idx, hits in enumerate(all_hits):
-            items = []
-            for hit in hits[0:topk]:
-                corpus_id = hit['corpus_id']
-                items.append({**self.corpus[name][corpus_id], **hit})
-            result[queries[idx]] = items
-        return self._get_search_result(result, return_dict)
-
-    async def _get_query_emb(self, queries:Union[str, List[str]], **encode_kwargs):
-        '''获取query的句向量'''
-        if isinstance(queries, str) or not hasattr(queries, '__len__'):
-            queries = [queries]
-        queries_embeddings = await self.encode(queries, **encode_kwargs)
-        return queries, queries_embeddings

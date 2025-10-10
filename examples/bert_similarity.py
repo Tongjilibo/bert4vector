@@ -1,12 +1,13 @@
 '''bert相似度
 '''
 from bert4vector.core import BertSimilarity
+from loguru import logger
 
 
 def main(model_dir):
     model = BertSimilarity(model_dir)
 
-    # ========encode========
+    logger.info("========encode========")
     sentences = ['喜欢打篮球的男生喜欢什么样的女生', '西安下雪了？是不是很冷啊?', '第一次去见女朋友父母该如何表现？', '小蝌蚪找妈妈怎么样', 
                 '给我推荐一款红色的车', '我喜欢北京']
 
@@ -16,7 +17,7 @@ def main(model_dir):
     print(vecs)
 
 
-    # ========search========
+    logger.info("========search========")
     model.reset()
     model.add_corpus(['你好', '我选你'])
     model.add_corpus(['天气不错', '人很好看'])
@@ -27,7 +28,7 @@ def main(model_dir):
     model.delete_corpus(['我选你', '人很好看'])
 
 
-    # ========similarity========
+    logger.info("========similarity========")
     model.reset()
     sent1 = ['喜欢打篮球的男生喜欢什么样的女生', '西安下雪了？是不是很冷啊?', '第一次去见女朋友父母该如何表现？', '小蝌蚪找妈妈怎么样', 
             '给我推荐一款红色的车', '我喜欢北京', 'That is a happy person']
