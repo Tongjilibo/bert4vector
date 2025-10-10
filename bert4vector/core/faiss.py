@@ -33,7 +33,7 @@ class FaissSimilarity(BertSimilarity):
         super().reset()
         self.indexes = dict()
     
-    def _add_embedding(self, new_corpus: Dict[int, str], name:str='default', 
+    def _add_embedding(self, corpus:List[str], name:str='default', 
                    ann_search:bool=False, gpu_index:bool=False,
                    gpu_memory:int=16, n_search:int=64, **kwargs):
         ''' 使用文档chunk来转为向量
@@ -46,7 +46,7 @@ class FaissSimilarity(BertSimilarity):
         :param gpu_memory: gpu的显存设置
         :param n_search: IndexIVFFlat 的 nprobe 属性默认为1, 在nprobe个最近邻的簇向量空间中进行 k 近邻搜索
         '''
-        super()._add_embedding(new_corpus, name=name, **kwargs)
+        super()._add_embedding(corpus, name=name, **kwargs)
         d = len(self.corpus_embeddings[name][0])
         nlist = int(math.sqrt(len(self.corpus_embeddings[name])))
         quantizer = faiss.IndexFlatIP(d)

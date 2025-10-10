@@ -1,18 +1,42 @@
-from typing import Optional, List, Union, Dict, Literal
+from typing import Optional, List, Union, Dict, Callable, Any
 import json
 from loguru import logger
-from bert4vector.core.base import VectorSimilarity, SEARCH_RES_TYPE
+from bert4vector.core.base import SimilarityBase, VectorSimilarity, SEARCH_RES_TYPE
 import numpy as np
 from torch4keras.snippets import is_package_available
-from bert4vector.snippets import semantic_search
+from bert4vector.snippets import cos_sim, dot_score, semantic_search
 import requests
 
 
 if is_package_available('torch'):
     import torch  
 
+# 默认 pre_process: OpenAI-compatible 格式
+def default_pre_proc(sentences, model_name):
+    inputs = [sentences] if isinstance(sentences, str) else sentences
+    return {
+        "model": model_name,
+        "input": inputs,
+        "encoding_format": "float"
+    }
 
-class RemoteSimilarityRequest(VectorSimilarity):
+
+# 默认 post_process: 提取 data[i].embedding
+def default_post_proc(response_json):
+    if "data" not in response_json:
+        raise ValueError(f"Invalid response format: missing 'data' field. Got: {list(response_json.keys())}")
+    return [item["embedding"] for item in sorted(response_json["data"], key=lambda x: x.get("index", 0))]
+
+
+# 默认 headers
+def default_headers(api_key):
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    return headers
+
+
+class OpenaiSimilarityRequest(VectorSimilarity):
     """ 在内存中存储和检索向量，访问远程的模型
     :param model_url: 模型权重地址
     :param config_path: 权重的config地址
@@ -21,8 +45,8 @@ class RemoteSimilarityRequest(VectorSimilarity):
 
     Example:
     ```python
-    >>> from bert4vector import BertVector
-    >>> model = RemoteSimilarityRequest('http://10.16.38.1:9901/v1/embeddings', 'bge-m3')
+    >>> from bert4vector.core import OpenaiSimilarityRequest
+    >>> model = OpenaiSimilarityRequest('http://10.16.38.1:9901/v1/embeddings', 'bge-m3')
     >>> model.add_corpus(['你好', '我选你'])
     >>> model.add_corpus(['天气不错', '人很好看'])
     >>> print(model.search('你好', topk=2))
@@ -32,19 +56,30 @@ class RemoteSimilarityRequest(VectorSimilarity):
     ... #           {'corpus_id': 3, 'score': 0.5694, 'text': '人很好看'}]} 
     ```
     """
-    def __init__(self, model_url:str, model_name:str, api_key:str=None, 
-                 corpus: List[str] = None, matching_type:str='RemoteSimilarityRequest', 
-                 timeout: int = 30, **model_config):
-        self.model_url =  model_url
+    def __init__(
+        self, 
+        model_url:str, 
+        model_name:str, 
+        api_key:str=None, 
+        corpus: List[str] = None, 
+        timeout: int = 30, 
+        # 自定义函数：输入 sentences, model_name → 返回 dict (payload)
+        pre_process_func: Callable[[Union[str, List[str]], str], Dict[Any, Any]] = None,
+        # 自定义函数：输入 response.json() → 返回 List[List[float]] (embeddings)
+        post_process_func: Callable[[Dict[Any, Any]], List[List[float]]] = None,
+        # 可选：自定义 headers 构造函数
+        headers_func: Callable[[Optional[str]], Dict[str, str]] = None,
+        **model_config
+    ):
+        self.model_url = model_url
         self.model_name = model_name
         self.timeout = timeout
-        self.headers = {"Content-type": "application/json"}
-        if api_key:
-            self.headers['Authorization'] = f'Bearer {api_key}'
+        self.pre_process_func = pre_process_func or default_pre_proc
+        self.post_process_func = post_process_func or default_post_proc
+        self.headers = (headers_func or default_headers)(api_key)
 
-        super().__init__(corpus=corpus, matching_type=matching_type)
+        super().__init__(corpus=corpus)
         self.emb_path = "corpus_emb.jsonl"
-
     def encode(
         self,
         sentences: Union[str, List[str]],
@@ -54,11 +89,9 @@ class RemoteSimilarityRequest(VectorSimilarity):
     ):
         """ 把句子转换成向量
         """
-        payload = {
-            "encoding_format": "float",
-            "input": sentences,
-            "model": self.model_name
-        }
+        # TODO:
+        payload = self.pre_process_func(sentences, self.model_name)
+
         try:
             response = requests.post(self.model_url, headers=self.headers, data=json.dumps(payload), 
                                      timeout=self.timeout)
@@ -68,7 +101,7 @@ class RemoteSimilarityRequest(VectorSimilarity):
             logger.error(f"Failed to get embeddings: {e}")
             raise
         
-        all_embeddings = [i['embedding'] for i in data['data']]
+        all_embeddings = self.post_process_func(data)
 
         if convert_to_numpy:
             all_embeddings = np.asarray(all_embeddings, dtype=np.float32)
@@ -78,7 +111,7 @@ class RemoteSimilarityRequest(VectorSimilarity):
         return all_embeddings
     
 
-class RemoteSimilarityAiohttp(VectorSimilarity):
+class OpenaiSimilarityAiohttp(SimilarityBase):
     """ 在内存中存储和检索向量，访问远程的模型
     :param model_url: 模型权重地址
     :param config_path: 权重的config地址
@@ -87,8 +120,8 @@ class RemoteSimilarityAiohttp(VectorSimilarity):
 
     Example:
     ```python
-    >>> from bert4vector import BertVector
-    >>> model = RemoteSimilarityAiohttp('http://10.16.38.1:9901/v1/embeddings', 'bge-m3')
+    >>> from bert4vector.core import OpenaiSimilarityAiohttp
+    >>> model = OpenaiSimilarityAiohttp('http://10.16.38.1:9901/v1/embeddings', 'bge-m3')
     >>> await model.add_corpus(['你好', '我选你'])
     >>> await model.add_corpus(['天气不错', '人很好看'])
     >>> print(await model.search('你好', topk=2))
@@ -98,21 +131,34 @@ class RemoteSimilarityAiohttp(VectorSimilarity):
     ... #           {'corpus_id': 3, 'score': 0.5694, 'text': '人很好看'}]} 
     ```
     """
-    def __init__(self, model_url:str, model_name:str, api_key:str=None, 
-                 corpus: List[str] = None, matching_type:str='RemoteSimilarityAiohttp', 
-                 timeout: int = 30, **model_config):
+    def __init__(
+        self, 
+        model_url:str, 
+        model_name:str, 
+        api_key:str=None, 
+        corpus: List[str] = None, 
+        timeout: int = 30, 
+        # 自定义函数：输入 sentences, model_name → 返回 dict (payload)
+        pre_process_func: Callable[[Union[str, List[str]], str], Dict[Any, Any]] = None,
+        # 自定义函数：输入 response.json() → 返回 List[List[float]] (embeddings)
+        post_process_func: Callable[[Dict[Any, Any]], List[List[float]]] = None,
+        # 可选：自定义 headers 构造函数
+        headers_func: Callable[[Optional[str]], Dict[str, str]] = None,
+        **model_config
+    ):
         self.model_url =  model_url
         self.model_name = model_name
-        self.headers = {"Content-type": "application/json"}
-        if api_key:
-            self.headers['Authorization'] = f'Bearer {api_key}'
+        self.pre_process_func = pre_process_func or default_pre_proc
+        self.post_process_func = post_process_func or default_post_proc
+        self.headers = (headers_func or default_headers)(api_key)
 
         import aiohttp
         self.timeout = aiohttp.ClientTimeout(total=timeout)
         self.aiohttp = aiohttp
 
-        super().__init__(corpus=corpus, matching_type=matching_type)
+        super().__init__(corpus=corpus)
         self.emb_path = "corpus_emb.jsonl"
+        self.score_functions = {'cos_sim': cos_sim, 'dot': dot_score}
 
     async def encode(
         self,
@@ -123,11 +169,8 @@ class RemoteSimilarityAiohttp(VectorSimilarity):
     ):
         """ 把句子转换成向量
         """
-        payload = {
-            "encoding_format": "float",
-            "input": sentences,
-            "model": self.model_name
-        }
+        payload = self.pre_process_func(sentences, self.model_name)
+
         try:
             async with self.aiohttp.ClientSession(headers=self.headers, timeout=self.timeout) as sess:
                 async with sess.post(self.model_url, data=json.dumps(payload)) as resp:
@@ -137,7 +180,7 @@ class RemoteSimilarityAiohttp(VectorSimilarity):
             logger.error(f"Failed to get embeddings: {e}")
             raise
 
-        all_embeddings = [i['embedding'] for i in data['data']]
+        all_embeddings = self.post_process_func(data)
 
         if convert_to_numpy:
             all_embeddings = np.asarray(all_embeddings, dtype=np.float32)
@@ -146,7 +189,25 @@ class RemoteSimilarityAiohttp(VectorSimilarity):
 
         return all_embeddings
     
-    async def _add_embedding(self, new_corpus: Dict[int, str], name:str='default', **encode_kwargs):
+    async def add_corpus(self, corpus: List[str], name:str='default', corpus_property:List[dict]=None, **kwargs):
+        """ 使用文档chunk来转为向量
+        :param corpus: 语料的list
+        :param name: sub_corpus名
+        :param corpus_property: 语料属性，由于corpus是去重时候会结果不同，为了防止和外部属性对应不上，这里可以返回
+        """
+        # 添加语料并放到语料库
+        new_corpus = self._add_corpus(corpus=corpus, name=name, corpus_property=corpus_property)
+        
+        # 转向量并放到向量库
+        await self._add_embedding(corpus=[item['text'] for item in new_corpus.values()], name=name, **kwargs)
+
+        # log
+        msg = f"Add {len(new_corpus)} docs for `{name}`, total: {len(self.corpus[name])}"
+        if len(self.corpus_embeddings[name]) > 0:
+            msg += f", emb dim: {len(self.corpus_embeddings[name][0])}"
+        logger.info(msg)
+
+    async def _add_embedding(self, corpus:List[str], name:str='default', **encode_kwargs):
         """ 使用文档chunk来转为向量
 
         >>> encode_kwargs参数
@@ -154,8 +215,7 @@ class RemoteSimilarityAiohttp(VectorSimilarity):
         :param normalize_embeddings: normalize embeddings before computing similarity
         """
         # 转向量并放到向量库
-        sentences = list(new_corpus.values())
-        corpus_embeddings = await self.encode(sentences, convert_to_numpy=False, show_progress_bar=True, **encode_kwargs)
+        corpus_embeddings = await self.encode(corpus, convert_to_numpy=False, show_progress_bar=True, **encode_kwargs)
         self.corpus_embeddings[name] = self.corpus_embeddings.get(name, []) + corpus_embeddings
 
     async def similarity(self, a: Union[str, List[str]], b: Union[str, List[str]], score_function:str="cos_sim", **encode_kwargs):

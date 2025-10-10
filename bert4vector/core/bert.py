@@ -14,8 +14,8 @@ class BertSimilarity(VectorSimilarity):
 
     Example:
     ```python
-    >>> from bert4vector import BertVector
-    >>> model = BertVector('/data/pretrain_ckpt/simbert/sushen@simbert-chinese-tiny')
+    >>> from bert4vector.core import BertSimilarity
+    >>> model = BertSimilarity('/data/pretrain_ckpt/simbert/sushen@simbert-chinese-tiny')
     >>> model.add_corpus(['你好', '我选你'], gpu_index=True)
     >>> model.add_corpus(['天气不错', '人很好看'], gpu_index=True)
     >>> print(model.search('你好', topk=2))
@@ -26,10 +26,11 @@ class BertSimilarity(VectorSimilarity):
     ```
     """
     def __init__(self, model_name_or_path:str, model_type:Literal['bert4torch', 'sentence_transformers']=None, 
-                 corpus: List[str] = None, matching_type:str='BertSimilarity', **model_config):
+                 corpus: List[str] = None, **model_config):
         self.model_type = model_type
         self.model = self.build_model(model_name_or_path, **model_config)
-        super().__init__(corpus=corpus, matching_type=matching_type)
+        super().__init__(corpus=corpus)
+        self.matchint_type = 'BertSimilarity'
         self.emb_path = "corpus_emb.jsonl"
 
     def build_model(self, model_name_or_path, **model_config):
@@ -77,8 +78,8 @@ class BertSimilarity(VectorSimilarity):
         
         Example:
         ```python
-        >>> from bert4vector import BertVector
-        >>> model = BertVector('/data/pretrain_ckpt/simbert/sushen@simbert-chinese-tiny')   
+        >>> from bert4vector.core import BertSimilarity
+        >>> model = BertSimilarity('/data/pretrain_ckpt/simbert/sushen@simbert-chinese-tiny')   
         >>> sentences = ['喜欢打篮球的男生喜欢什么样的女生', '西安下雪了？是不是很冷啊?', 
         ...              '第一次去见女朋友父母该如何表现？', '小蝌蚪找妈妈怎么样', 
         ...              '给我推荐一款红色的车', '我喜欢北京']

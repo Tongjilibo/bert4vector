@@ -1,5 +1,5 @@
-from .base import *
-from .bert import *
-from .faiss import *
+from .base import SimilarityBase, PairedSimilarity, VectorSimilarity
+from .bert import BertSimilarity
+from .faiss import FaissSimilarity
 from .lteral import *
-from .http import *
+from .openai import OpenaiSimilarityRequest, OpenaiSimilarityAiohttp

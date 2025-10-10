@@ -8,6 +8,7 @@ from tqdm import tqdm
 from bert4vector.snippets import cos_sim, dot_score, semantic_search
 from pathlib import Path
 import numpy as np
+import os
 
 
 SEARCH_RES_TYPE = Union[List, Dict[str, List]]  # search返回的数据类型
@@ -16,15 +17,19 @@ SEARCH_RES_TYPE = Union[List, Dict[str, List]]  # search返回的数据类型
 class SimilarityBase:
     """基类
     """
-    def __init__(self, corpus: List[str] = None, matching_type:str='Base') -> None:
+    def __init__(self, corpus: List[str] = None) -> None:
         self.corpus = {}
         self.corpus_embeddings = {}
-        self.matchint_type = matching_type
+        # self.matchint_type = 'Base'
         self.corpus_path = 'config.jsonl'
         self.emb_path = 'emg.jsonl'
         if corpus is not None:
             self.add_corpus(corpus)
 
+    @property
+    def matching_type(self):
+        return self.__class__.__name__
+    
     def __len__(self):
         """Get length of corpus."""
         return sum([len(i) for i in self.corpus.values()])
@@ -121,7 +126,7 @@ class SimilarityBase:
         new_corpus = self._add_corpus(corpus=corpus, name=name, corpus_property=corpus_property)
         
         # 转向量并放到向量库
-        self._add_embedding(new_corpus=new_corpus, name=name, **kwargs)
+        self._add_embedding(corpus=[item['text'] for item in new_corpus.values()], name=name, **kwargs)
 
         # log
         msg = f"Add {len(new_corpus)} docs for `{name}`, total: {len(self.corpus[name])}"
@@ -129,7 +134,7 @@ class SimilarityBase:
             msg += f", emb dim: {len(self.corpus_embeddings[name][0])}"
         logger.info(msg)
 
-    def _add_corpus(self, corpus: List[str], name:str='default', corpus_property:List[dict]=None, **kwargs):
+    def _add_corpus(self, corpus: List[str], name:str='default', corpus_property:List[dict]=None, **kwargs) -> Dict[int, dict]:
         '''添加语料并放到语料库'''
         assert isinstance(corpus, (list, tuple, set)) and all([isinstance(c, str) for c in corpus]), \
             'Args `corpus` only support List[str] format'
@@ -164,7 +169,7 @@ class SimilarityBase:
         del new_corpus_set
         return new_corpus
     
-    def _add_embedding(self, new_corpus:Dict[int, str], name:str='default', **kwargs):
+    def _add_embedding(self, corpus:List[str], name:str='default', **kwargs):
         '''转向量并放到向量库
         :param corpus: 语料的list
         :param name: sub_corpus名
@@ -178,7 +183,7 @@ class SimilarityBase:
         """
         # 转向量并放到向量库
         corpus_embeddings = []
-        for sentence in tqdm(list(new_corpus.values()), desc="Encoding"):
+        for sentence in tqdm(corpus, desc="Encoding"):
             sent_emb = self.encode(sentence, **kwargs)
             if isinstance(sent_emb, np.ndarray):
                 sent_emb = sent_emb.tolist()                
@@ -243,6 +248,7 @@ class SimilarityBase:
     def _save_corpus(self, corpus_path:Path=None):
         '''保存语料到文件'''
         corpus_path = self.corpus_path if corpus_path is None else corpus_path
+        os.makedirs(os.path.dirname(corpus_path), exist_ok=True)
         with open(corpus_path, 'w', encoding='utf-8') as f:
             for name, sub_corpus in self.corpus.items():
                 for idx, text in sub_corpus.items():
@@ -271,8 +277,9 @@ class SimilarityBase:
 
 class PairedSimilarity(SimilarityBase):
     '''成对的texts组相似度计算'''
-    def __init__(self, corpus: List[str] = None, matching_type:str='PairedSimilarity'):
-        super().__init__(corpus=corpus, matching_type=matching_type)
+    def __init__(self, corpus: List[str] = None):
+        super().__init__(corpus=corpus)
+        self.matchint_type = 'PairedSimilarity'
    
     def encode(self, sentences:Union[str, List], **kwargs):
         '''sentences转为编码, 这里默认不做任何处理'''
@@ -320,8 +327,8 @@ class PairedSimilarity(SimilarityBase):
 
 class VectorSimilarity(SimilarityBase):
     '''基于向量的相似度计算'''
-    def __init__(self, corpus: List[str] = None, matching_type:str='VectorSimilarity'):
-        super().__init__(corpus=corpus, matching_type=matching_type)
+    def __init__(self, corpus: List[str] = None):
+        super().__init__(corpus=corpus)
         self.score_functions = {'cos_sim': cos_sim, 'dot': dot_score}
 
     def similarity(self, a: Union[str, List[str]], b: Union[str, List[str]], score_function:str="cos_sim", **encode_kwargs):
@@ -380,7 +387,7 @@ class VectorSimilarity(SimilarityBase):
         queries_embeddings = self.encode(queries, **encode_kwargs)
         return queries, queries_embeddings
 
-    def _add_embedding(self, new_corpus: Dict[int, str], name:str='default', **encode_kwargs):
+    def _add_embedding(self, corpus:List[str], name:str='default', **encode_kwargs):
         """ 使用文档chunk来转为向量
 
         >>> encode_kwargs参数
@@ -388,5 +395,5 @@ class VectorSimilarity(SimilarityBase):
         :param normalize_embeddings: normalize embeddings before computing similarity
         """
         # 转向量并放到向量库
-        corpus_embeddings = self.encode(list(new_corpus.values()), show_progress_bar=True, **encode_kwargs).tolist()
+        corpus_embeddings = self.encode(corpus, show_progress_bar=True, **encode_kwargs).tolist()
         self.corpus_embeddings[name] = self.corpus_embeddings.get(name, []) + corpus_embeddings

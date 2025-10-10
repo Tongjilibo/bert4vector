@@ -50,8 +50,8 @@ class SameCharsSimilarity(PairedSimilarity):
     >>> print(text2vec.search(['你好', '天气晴']))
     ```
     """
-    def __init__(self, corpus: List[str] = None, matching_type:str='SameCharsSimilarity'):
-        super().__init__(corpus=corpus, matching_type=matching_type)
+    def __init__(self, corpus: List[str] = None):
+        super().__init__(corpus=corpus)
 
     def calc_pair_sim(self, emb1:str, emb2:str, **kwargs):
         '''计算两个编码之间的相似度'''
@@ -87,7 +87,7 @@ class LongestCommonSubstringSimilarity(PairedSimilarity):
     def __init__(self, corpus: List[str] = None,
                  min_same_len: int = 70, 
                  min_same_len_score: float = 0.9):
-        super().__init__(corpus=corpus, matching_type='LongestCommonSubstringSimilarity')
+        super().__init__(corpus=corpus)
         self.min_same_len = min_same_len
         self.min_same_len_score = min_same_len_score
 
@@ -107,7 +107,7 @@ class LongestCommonSubsequenceSimilarity(PairedSimilarity):
     def __init__(self, corpus: List[str] = None,
                  min_same_len: int = 70, 
                  min_same_len_score: float = 0.9):
-        super().__init__(corpus=corpus, matching_type='LongestCommonSubsequenceSimilarity')
+        super().__init__(corpus=corpus)
         self.min_same_len = min_same_len
         self.min_same_len_score = min_same_len_score
 
@@ -126,7 +126,7 @@ class HownetSimilarity(PairedSimilarity):
     """
     default_hownet_path = os.path.join(os.path.dirname(pwd_path), 'config/hownet.txt')
 
-    def __init__(self, corpus: List[str] = None, hownet_path: str = default_hownet_path, matching_type:str='HownetSimilarity'):
+    def __init__(self, corpus: List[str] = None, hownet_path: str = default_hownet_path):
         # 加载Hownet语义词典
         self.hownet_dict = {}
         for line in open(hownet_path, 'r', encoding='utf-8'):
@@ -137,7 +137,7 @@ class HownetSimilarity(PairedSimilarity):
 
         import jieba, jieba.posseg, jieba.analyse
         self.jieba, self.jieba.posseg, self.jieba.analyse = jieba, jieba.posseg, jieba.analyse
-        super().__init__(corpus=corpus, matching_type=matching_type)
+        super().__init__(corpus=corpus)
 
     def _word_sim(self, word1, word2):
         """比较两个词语之间的相似度"""
@@ -169,8 +169,8 @@ class HownetSimilarity(PairedSimilarity):
 class SimHashSimilarity(PairedSimilarity):
     """计算两组texts之间的SimHash相似度
     """
-    def __init__(self, corpus: List[str] = None, matching_type:str='SimHashSimilarity'):
-        super().__init__(corpus=corpus, matching_type=matching_type)
+    def __init__(self, corpus: List[str] = None):
+        super().__init__(corpus=corpus)
         self.emb_path = "hash_emb.jsonl"
         import jieba, jieba.posseg, jieba.analyse
         self.jieba, self.jieba.posseg, self.jieba.analyse = jieba, jieba.posseg, jieba.analyse
@@ -227,8 +227,8 @@ class SimHashSimilarity(PairedSimilarity):
 class TfidfSimilarity(VectorSimilarity):
     """计算两组texts之间的Tfidf相似度
     """
-    def __init__(self, corpus: List[str] = None, matching_type:str='TfidfSimilarity'):
-        super().__init__(corpus=corpus, matching_type=matching_type)
+    def __init__(self, corpus: List[str] = None):
+        super().__init__(corpus=corpus)
         self.tfidf = TFIDF()
 
     def encode(self, sentences:Union[str, List], **kwargs) -> np.ndarray:
@@ -243,8 +243,8 @@ class BM25Similarity(PairedSimilarity):
     """计算两组texts之间的BM25OKapi相似度
     目前只能召回, 并不能encode和similariry
     """
-    def __init__(self, corpus: List[str] = None, matching_type:str='BM25Similarity'):
-        super().__init__(corpus=corpus, matching_type=matching_type)
+    def __init__(self, corpus: List[str] = None):
+        super().__init__(corpus=corpus)
         self.bm25 = dict()
         self.default_stopwords = load_stopwords(default_stopwords_file)
         import jieba, jieba.posseg, jieba.analyse
@@ -253,17 +253,17 @@ class BM25Similarity(PairedSimilarity):
     def calc_pair_sim(self, emb1:str, emb2:str, **kwargs):
         raise NotImplementedError('BM25Similarity does not support similarity, please use search method instead.')
     
-    def _add_embedding(self, new_corpus:Dict[int, str], name:str='default', **kwargs):
+    def _add_embedding(self, corpus:List[str], name:str='default', **kwargs):
         """build bm25 model."""
-        corpus_texts = self._get_corpus_text(name)
-        corpus_seg = [self.jieba.lcut(d) for d in corpus_texts]
+        corpus_seg = [self.jieba.lcut(d) for d in corpus]
         corpus_seg = [[w for w in doc if (w.strip().lower() not in self.default_stopwords) and
                        len(w.strip()) > 0] for doc in corpus_seg]
         self.bm25[name] = BM25Okapi(corpus_seg)
 
     def search(self, queries: Union[str, List[str]], topk: int = 10, name:str='default', return_dict:bool=True) -> Dict[str, List]:
         if name not in self.bm25:
-            self._add_embedding(name=name)
+            raise ValueError(f'No bm25 model found for name: {name}')
+        
         if isinstance(queries, str):
             queries = [queries]
         result = {}
@@ -281,8 +281,8 @@ class CilinSimilarity(PairedSimilarity):
     """
     default_cilin_path = os.path.join(os.path.dirname(pwd_path), 'config/cilin.txt')
 
-    def __init__(self, corpus: List[str] = None, matching_type:str='CilinSimilarity', cilin_path: str = default_cilin_path):
-        super().__init__(corpus=corpus, matching_type=matching_type)
+    def __init__(self, corpus: List[str] = None, cilin_path: str = default_cilin_path):
+        super().__init__(corpus=corpus)
         self.cilin_dict = self.load_cilin_dict(cilin_path)  # Cilin(词林) semantic dictionary
         import jieba, jieba.posseg, jieba.analyse
         self.jieba, self.jieba.posseg, self.jieba.analyse = jieba, jieba.posseg, jieba.analyse

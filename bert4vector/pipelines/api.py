@@ -71,12 +71,12 @@ class SimilaritySever:
     """
     def __init__(self, 
                  model_name_or_path: str=None, 
-                 mode:Literal['BertVector', 'FaissVector', 'LongestCommonSubstringSimilarity', 'HownetSimilarity',
-                              'SimHashSimilarity', 'TfidfSimilarity', 'BM25Similarity', 'CilinSimilarity']='BertVector',
+                 mode:Literal['BertSimilarity', 'FaissSimilarity', 'LongestCommonSubstringSimilarity', 'HownetSimilarity',
+                              'SimHashSimilarity', 'TfidfSimilarity', 'BM25Similarity', 'CilinSimilarity']='BertSimilarity',
                  **model_config):
-        if mode == 'BertVector':
+        if mode == 'BertSimilarity':
             self.model = BertSimilarity(model_name_or_path, **model_config)
-        elif mode == 'FaissVector':
+        elif mode == 'FaissSimilarity':
             self.model = FaissSimilarity(model_name_or_path, **model_config)
         elif mode == 'LongestCommonSubstringSimilarity':
             self.model = LongestCommonSubstringSimilarity(**model_config)
