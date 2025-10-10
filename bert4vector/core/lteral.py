@@ -27,6 +27,7 @@ __all__ = [
     'CilinSimilarity'
  ]
 
+
 class SameCharsSimilarity(PairedSimilarity):
     """基于相同字符数占比计算相似度（不考虑文本字符位置顺序）
 
@@ -59,6 +60,7 @@ class SameCharsSimilarity(PairedSimilarity):
         same = set(emb1) & set(emb2)
         similarity_score = max(len(same) / len(set(emb1)), len(same) / len(set(emb2)))
         return similarity_score
+
 
 class LongestCommonSubstringSimilarity(PairedSimilarity):
     """基于最长公共子串占比计算相似度
@@ -248,6 +250,9 @@ class BM25Similarity(PairedSimilarity):
         import jieba, jieba.posseg, jieba.analyse
         self.jieba, self.jieba.posseg, self.jieba.analyse = jieba, jieba.posseg, jieba.analyse
 
+    def calc_pair_sim(self, emb1:str, emb2:str, **kwargs):
+        raise NotImplementedError('BM25Similarity does not support similarity, please use search method instead.')
+    
     def _add_embedding(self, new_corpus:Dict[int, str], name:str='default', **kwargs):
         """build bm25 model."""
         corpus_texts = self._get_corpus_text(name)

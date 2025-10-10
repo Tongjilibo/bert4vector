@@ -65,7 +65,7 @@ class SimilaritySever:
     Example:
     ```python
     >>> from bert4vector.pipelines import SimilaritySever
-    >>> server = SimilaritySever('/data/pretrain_ckpt/simbert/sushen@simbert_chinese_tiny')
+    >>> server = SimilaritySever('/data/pretrain_ckpt/simbert/sushen@simbert-chinese-tiny')
     >>> server.run(port=8002)
     ```
     """

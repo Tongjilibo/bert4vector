@@ -33,7 +33,7 @@ pip install git+https://github.com/Tongjilibo/bert4vector
 - 向量计算
 ```python
 from bert4vector.core import BertSimilarity
-model = BertSimilarity('/data/pretrain_ckpt/Tongjilibo/simbert_chinese_tiny')
+model = BertSimilarity('/data/pretrain_ckpt/Tongjilibo/simbert-chinese-tiny')
 sentences = ['喜欢打篮球的男生喜欢什么样的女生', '西安下雪了？是不是很冷啊?', '第一次去见女朋友父母该如何表现？', '小蝌蚪找妈妈怎么样', '给我推荐一款红色的车', '我喜欢北京']
 vecs = model.encode(sentences, convert_to_numpy=True, normalize_embeddings=False)
 print(vecs.shape)
@@ -43,7 +43,7 @@ print(vecs.shape)
 - 相似度计算
 ```python
 from bert4vector.core import BertSimilarity
-text2vec = BertSimilarity('/data/pretrain_ckpt/Tongjilibo/simbert_chinese_tiny')
+text2vec = BertSimilarity('/data/pretrain_ckpt/Tongjilibo/simbert-chinese-tiny')
 sent1 = ['你好', '天气不错']
 sent2 = ['你好啊', '天气很好']
 similarity = text2vec.similarity(sent1, sent2)
@@ -55,7 +55,7 @@ print(similarity)
 - 向量存储和检索
 ```python
 from bert4vector.core import BertSimilarity
-model = BertSimilarity('/data/pretrain_ckpt/Tongjilibo/simbert_chinese_tiny')
+model = BertSimilarity('/data/pretrain_ckpt/Tongjilibo/simbert-chinese-tiny')
 model.add_corpus(['你好', '我选你', '天气不错', '人很好看'])
 print(model.search('你好'))
 # {'你好': [{'corpus_id': 0, 'score': 0.9999, 'text': '你好'},

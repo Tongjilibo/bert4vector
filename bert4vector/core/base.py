@@ -320,7 +320,7 @@ class PairedSimilarity(SimilarityBase):
 
 class VectorSimilarity(SimilarityBase):
     '''基于向量的相似度计算'''
-    def __init__(self, corpus: List[str] = None, matching_type:str='PairedSimilarity'):
+    def __init__(self, corpus: List[str] = None, matching_type:str='VectorSimilarity'):
         super().__init__(corpus=corpus, matching_type=matching_type)
         self.score_functions = {'cos_sim': cos_sim, 'dot': dot_score}
 
@@ -379,3 +379,14 @@ class VectorSimilarity(SimilarityBase):
             queries = [queries]
         queries_embeddings = self.encode(queries, **encode_kwargs)
         return queries, queries_embeddings
+
+    def _add_embedding(self, new_corpus: Dict[int, str], name:str='default', **encode_kwargs):
+        """ 使用文档chunk来转为向量
+
+        >>> encode_kwargs参数
+        :param batch_size: batch size for computing embeddings
+        :param normalize_embeddings: normalize embeddings before computing similarity
+        """
+        # 转向量并放到向量库
+        corpus_embeddings = self.encode(list(new_corpus.values()), show_progress_bar=True, **encode_kwargs).tolist()
+        self.corpus_embeddings[name] = self.corpus_embeddings.get(name, []) + corpus_embeddings

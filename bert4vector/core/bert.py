@@ -15,7 +15,7 @@ class BertSimilarity(VectorSimilarity):
     Example:
     ```python
     >>> from bert4vector import BertVector
-    >>> model = BertVector('/data/pretrain_ckpt/simbert/sushen@simbert_chinese_tiny')
+    >>> model = BertVector('/data/pretrain_ckpt/simbert/sushen@simbert-chinese-tiny')
     >>> model.add_corpus(['你好', '我选你'], gpu_index=True)
     >>> model.add_corpus(['天气不错', '人很好看'], gpu_index=True)
     >>> print(model.search('你好', topk=2))
@@ -78,7 +78,7 @@ class BertSimilarity(VectorSimilarity):
         Example:
         ```python
         >>> from bert4vector import BertVector
-        >>> model = BertVector('/data/pretrain_ckpt/simbert/sushen@simbert_chinese_tiny')   
+        >>> model = BertVector('/data/pretrain_ckpt/simbert/sushen@simbert-chinese-tiny')   
         >>> sentences = ['喜欢打篮球的男生喜欢什么样的女生', '西安下雪了？是不是很冷啊?', 
         ...              '第一次去见女朋友父母该如何表现？', '小蝌蚪找妈妈怎么样', 
         ...              '给我推荐一款红色的车', '我喜欢北京']
@@ -95,18 +95,3 @@ class BertSimilarity(VectorSimilarity):
             normalize_embeddings=normalize_embeddings,
             **kwargs
         )
-    
-    def _add_embedding(self, new_corpus: Dict[int, str], name:str='default', **encode_kwargs):
-        """ 使用文档chunk来转为向量
-
-        >>> encode_kwargs参数
-        :param batch_size: batch size for computing embeddings
-        :param normalize_embeddings: normalize embeddings before computing similarity
-        """
-        # 转向量并放到向量库
-        corpus_embeddings = self.encode(
-            list(new_corpus.values()),
-            show_progress_bar=True,
-            **encode_kwargs
-        ).tolist()
-        self.corpus_embeddings[name] = self.corpus_embeddings.get(name, []) + corpus_embeddings

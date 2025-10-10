@@ -5,7 +5,7 @@ import pytest
 import os
 os.environ['HF_ENDPOINT'] = "https://hf-mirror.com"
 
-model_dir = ['/data/pretrain_ckpt/Tongjilibo/simbert_chinese_tiny']
+model_dir = ['/data/pretrain_ckpt/Tongjilibo/simbert-chinese-tiny']
 
 
 @pytest.mark.parametrize("model_dir", model_dir)

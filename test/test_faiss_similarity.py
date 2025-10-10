@@ -3,7 +3,7 @@
 from bert4vector.core import FaissSimilarity
 import pytest
 
-model_dir = ['/data/pretrain_ckpt/Tongjilibo/simbert_chinese_tiny']
+model_dir = ['/data/pretrain_ckpt/Tongjilibo/simbert-chinese-tiny']
 
 
 @pytest.mark.parametrize("model_dir", model_dir)
@@ -40,7 +40,7 @@ def test_similarity(model_dir):
 
 
 if __name__ == '__main__':
-    model_dir = '/data/pretrain_ckpt/simbert/sushen@simbert_chinese_tiny'
+    model_dir = '/data/pretrain_ckpt/simbert/sushen@simbert-chinese-tiny'
     test_encode(model_dir)
     test_similarity(model_dir)
     test_search(model_dir)
