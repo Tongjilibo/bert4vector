@@ -1,114 +1,67 @@
 """
 @author:Libo(tongjilibo@163.com)
 @description:
-copy from https://github.com/UKPLab/sentence-transformers/blob/master/sentence_transformers/util.py
+Pure numpy backend implementation of similarity functions
 """
 
 import heapq
 import queue
 from typing import Union
 import numpy as np
-from torch4keras.snippets import is_torch_available
 
 
-# 允许不安装torch来使用
-if is_torch_available():
-    import torch
-    import torch.nn.functional
-    torch_Tensor = torch.Tensor
-else:
-    class torch_Tensor:
-        pass
+def normalize_embeddings(embeddings: np.ndarray):
+    """
+    Normalizes the embeddings matrix, so that each sentence embedding has unit length
+    """
+    norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+    norms = np.where(norms == 0, 1, norms)  # avoid division by zero
+    return embeddings / norms
 
 
-def cos_sim(a: Union[torch_Tensor, np.ndarray], b: Union[torch_Tensor, np.ndarray]):
+def cos_sim(a: Union[np.ndarray], b: Union[np.ndarray]):
     """
     Computes the cosine similarity cos_sim(a[i], b[j]) for all i and j.
     :return: Matrix with res[i][j]  = cos_sim(a[i], b[j])
     """
-    is_tensor = True
-    if not isinstance(a, torch_Tensor):
-        a = torch.tensor(a, dtype=torch.float)
-        is_tensor = False
-
-    if not isinstance(b, torch_Tensor):
-        b = torch.tensor(b, dtype=torch.float)
-        is_tensor = False
-
-    if len(a.shape) == 1:
-        a = a.unsqueeze(0)
-
-    if len(b.shape) == 1:
-        b = b.unsqueeze(0)
-
-    a_norm = torch.nn.functional.normalize(a, p=2, dim=1)
-    b_norm = torch.nn.functional.normalize(b, p=2, dim=1)
-    scores = torch.mm(a_norm, b_norm.transpose(0, 1))
-    return scores if is_tensor else scores.numpy()
+    a = np.atleast_2d(a)
+    b = np.atleast_2d(b)
+    a_norm = normalize_embeddings(a)
+    b_norm = normalize_embeddings(b)
+    return np.dot(a_norm, b_norm.T)
 
 
-def dot_score(a: Union[torch_Tensor, np.ndarray], b: Union[torch_Tensor, np.ndarray]):
+def dot_score(a: Union[np.ndarray], b: Union[np.ndarray]):
     """
     Computes the dot-product dot_prod(a[i], b[j]) for all i and j.
     :return: Matrix with res[i][j]  = dot_prod(a[i], b[j])
     """
-    is_tensor = True
-    if not isinstance(a, torch_Tensor):
-        a = torch.tensor(a)
-        is_tensor = False
-
-    if not isinstance(b, torch_Tensor):
-        b = torch.tensor(b)
-        is_tensor = False
-
-    if len(a.shape) == 1:
-        a = a.unsqueeze(0)
-
-    if len(b.shape) == 1:
-        b = b.unsqueeze(0)
-
-    scores = torch.mm(a, b.transpose(0, 1))
-    return scores if is_tensor else scores.numpy()
+    a = np.atleast_2d(a)
+    b = np.atleast_2d(b)
+    return np.dot(a, b.T)
 
 
-def pairwise_dot_score(a: Union[torch_Tensor, np.ndarray], b: Union[torch_Tensor, np.ndarray]):
+def pairwise_dot_score(a: Union[np.ndarray], b: Union[np.ndarray]):
     """
     Computes the pairwise dot-product dot_prod(a[i], b[i])
     :return: Vector with res[i] = dot_prod(a[i], b[i])
     """
-    if not isinstance(a, torch_Tensor):
-        a = torch.tensor(a)
-
-    if not isinstance(b, torch_Tensor):
-        b = torch.tensor(b)
-
-    return (a * b).sum(dim=-1)
+    return np.sum(a * b, axis=-1)
 
 
-def pairwise_cos_sim(a: Union[torch_Tensor, np.ndarray], b: Union[torch_Tensor, np.ndarray]):
+def pairwise_cos_sim(a: Union[np.ndarray], b: Union[np.ndarray]):
     """
    Computes the pairwise cossim cos_sim(a[i], b[i])
    :return: Vector with res[i] = cos_sim(a[i], b[i])
    """
-    if not isinstance(a, torch_Tensor):
-        a = torch.tensor(a)
-
-    if not isinstance(b, torch_Tensor):
-        b = torch.tensor(b)
-
-    return pairwise_dot_score(normalize_embeddings(a), normalize_embeddings(b))
-
-
-def normalize_embeddings(embeddings: torch_Tensor):
-    """
-    Normalizes the embeddings matrix, so that each sentence embedding has unit length
-    """
-    return torch.nn.functional.normalize(embeddings, p=2, dim=1)
+    a_norm = normalize_embeddings(np.atleast_2d(a))
+    b_norm = normalize_embeddings(np.atleast_2d(b))
+    return pairwise_dot_score(a_norm, b_norm)
 
 
 def semantic_search(
-        query_embeddings: Union[torch_Tensor, np.ndarray],
-        corpus_embeddings: Union[torch_Tensor, np.ndarray],
+        query_embeddings: Union[np.ndarray],
+        corpus_embeddings: Union[np.ndarray],
         query_chunk_size: int = 100,
         corpus_chunk_size: int = 500000,
         top_k: int = 10,
@@ -118,8 +71,8 @@ def semantic_search(
     This function performs a cosine similarity search between a list of query embeddings and corpus embeddings.
     It can be used for Information Retrieval / Semantic Search for corpora up to about 1 Million entries.
 
-    :param query_embeddings: A 2-dimensional tensor with the query embeddings.
-    :param corpus_embeddings: A 2-dimensional tensor with the corpus embeddings.
+    :param query_embeddings: A 2-dimensional array with the query embeddings.
+    :param corpus_embeddings: A 2-dimensional array with the corpus embeddings.
     :param query_chunk_size: Process 100 queries simultaneously. Increasing that value increases the speed, but
         requires more memory.
     :param corpus_chunk_size: Scans the corpus 100k entries at a time. Increasing that value increases the speed,
@@ -129,23 +82,8 @@ def semantic_search(
     :return: Returns a list with one entry for each query. Each entry is a list of dictionaries with the keys
         'corpus_id' and 'score', sorted by decreasing cosine similarity scores.
     """
-
-    if isinstance(query_embeddings, (np.ndarray, np.generic)):
-        query_embeddings = torch.from_numpy(query_embeddings)
-    elif isinstance(query_embeddings, list):
-        query_embeddings = torch.stack(query_embeddings)
-
-    if len(query_embeddings.shape) == 1:
-        query_embeddings = query_embeddings.unsqueeze(0)
-
-    if isinstance(corpus_embeddings, (np.ndarray, np.generic)):
-        corpus_embeddings = torch.from_numpy(corpus_embeddings)
-    elif isinstance(corpus_embeddings, list):
-        corpus_embeddings = torch.stack(corpus_embeddings)
-
-    # Check that corpus and queries are on the same device
-    if corpus_embeddings.device != query_embeddings.device:
-        query_embeddings = query_embeddings.to(corpus_embeddings.device)
+    query_embeddings = np.atleast_2d(query_embeddings)
+    corpus_embeddings = np.atleast_2d(corpus_embeddings)
 
     queries_result_list = [[] for _ in range(len(query_embeddings))]
 
@@ -156,16 +94,20 @@ def semantic_search(
             cos_scores = score_function(query_embeddings[query_start_idx:query_start_idx + query_chunk_size],
                                         corpus_embeddings[corpus_start_idx:corpus_start_idx + corpus_chunk_size])
 
-            # Get top-k scores
-            cos_scores_top_k_values, cos_scores_top_k_idx = torch.topk(
-                cos_scores, min(top_k, len(cos_scores[0])), dim=1, largest=True, sorted=False)
-            cos_scores_top_k_values = cos_scores_top_k_values.cpu().tolist()
-            cos_scores_top_k_idx = cos_scores_top_k_idx.cpu().tolist()
-
-            for query_itr in range(len(cos_scores)):
-                for sub_corpus_id, score in zip(cos_scores_top_k_idx[query_itr], cos_scores_top_k_values[query_itr]):
+            # Get top-k scores for each query in chunk
+            for query_itr in range(cos_scores.shape[0]):
+                query_scores = cos_scores[query_itr]
+                # Use argpartition for efficiency if top_k << len(corpus_batch)
+                if top_k < len(query_scores):
+                    top_k_indices = np.argpartition(query_scores, -top_k)[-top_k:]
+                    top_k_scores = query_scores[top_k_indices]
+                else:
+                    top_k_indices = np.arange(len(query_scores))
+                    top_k_scores = query_scores
+                
+                query_id = query_start_idx + query_itr
+                for sub_corpus_id, score in zip(top_k_indices, top_k_scores):
                     corpus_id = corpus_start_idx + sub_corpus_id
-                    query_id = query_start_idx + query_itr
                     if len(queries_result_list[query_id]) < top_k:
                         heapq.heappush(queries_result_list[query_id], (
                             score, corpus_id))  # heaqp tracks the quantity of the first element in the tuple
@@ -184,7 +126,7 @@ def semantic_search(
 
 
 def paraphrase_mining_embeddings(
-        embeddings: torch_Tensor,
+        embeddings: np.ndarray,
         query_chunk_size: int = 5000,
         corpus_chunk_size: int = 100000,
         max_pairs: int = 500000,
@@ -195,7 +137,7 @@ def paraphrase_mining_embeddings(
     Given a list of sentences / texts, this function performs paraphrase mining. It compares all sentences against all
     other sentences and returns a list with the pairs that have the highest cosine similarity score.
 
-    :param embeddings: A tensor with the embeddings
+    :param embeddings: An array with the embeddings
     :param query_chunk_size: Search for most similar pairs for #query_chunk_size at the same time. Decrease, to lower memory footprint (increases run-time).
     :param corpus_chunk_size: Compare a sentence simultaneously against #corpus_chunk_size other sentences. Decrease, to lower memory footprint (increases run-time).
     :param max_pairs: Maximal number of text pairs returned.
@@ -210,24 +152,30 @@ def paraphrase_mining_embeddings(
     pairs = queue.PriorityQueue()
     min_score = -1
     num_added = 0
+    n = len(embeddings)
 
-    for corpus_start_idx in range(0, len(embeddings), corpus_chunk_size):
-        for query_start_idx in range(0, len(embeddings), query_chunk_size):
+    for corpus_start_idx in range(0, n, corpus_chunk_size):
+        for query_start_idx in range(0, n, query_chunk_size):
             scores = score_function(embeddings[query_start_idx:query_start_idx + query_chunk_size],
                                     embeddings[corpus_start_idx:corpus_start_idx + corpus_chunk_size])
 
-            scores_top_k_values, scores_top_k_idx = torch.topk(
-                scores, min(top_k, len(scores[0])), dim=1, largest=True, sorted=False)
-            scores_top_k_values = scores_top_k_values.cpu().tolist()
-            scores_top_k_idx = scores_top_k_idx.cpu().tolist()
+            # Get top-k scores for each query in chunk
+            for query_itr in range(scores.shape[0]):
+                query_scores = scores[query_itr]
+                
+                if top_k < len(query_scores):
+                    top_k_indices = np.argpartition(query_scores, -top_k)[-top_k:]
+                    top_k_scores = query_scores[top_k_indices]
+                else:
+                    top_k_indices = np.arange(len(query_scores))
+                    top_k_scores = query_scores
+                
+                i = query_start_idx + query_itr
+                for j_idx, j_score in zip(top_k_indices, top_k_scores):
+                    j = corpus_start_idx + j_idx
 
-            for query_itr in range(len(scores)):
-                for top_k_idx, corpus_itr in enumerate(scores_top_k_idx[query_itr]):
-                    i = query_start_idx + query_itr
-                    j = corpus_start_idx + corpus_itr
-
-                    if i != j and scores_top_k_values[query_itr][top_k_idx] > min_score:
-                        pairs.put((scores_top_k_values[query_itr][top_k_idx], i, j))
+                    if i != j and j_score > min_score:
+                        pairs.put((j_score, i, j))
                         num_added += 1
 
                         if num_added >= max_pairs:
@@ -257,46 +205,45 @@ def community_detection(embeddings, threshold=0.75, min_community_size=10, batch
     Returns only communities that are larger than min_community_size. The communities are returned
     in decreasing order. The first element in each list is the central point in the community.
     """
-    if not isinstance(embeddings, torch_Tensor):
-        embeddings = torch.tensor(embeddings)
-
-    threshold = torch.tensor(threshold, device=embeddings.device)
+    embeddings = np.atleast_2d(embeddings)
+    n = len(embeddings)
 
     extracted_communities = []
 
     # Maximum size for community
-    min_community_size = min(min_community_size, len(embeddings))
-    sort_max_size = min(max(2 * min_community_size, 50), len(embeddings))
+    min_community_size = min(min_community_size, n)
+    sort_max_size = min(max(2 * min_community_size, 50), n)
 
-    for start_idx in range(0, len(embeddings), batch_size):
+    for start_idx in range(0, n, batch_size):
+        end_idx = min(start_idx + batch_size, n)
         # Compute cosine similarity scores
-        cos_scores = cos_sim(embeddings[start_idx:start_idx + batch_size], embeddings)
+        cos_scores = cos_sim(embeddings[start_idx:end_idx], embeddings)
 
         # Minimum size for a community
-        top_k_values, _ = cos_scores.topk(k=min_community_size, largest=True)
-
-        # Filter for rows >= min_threshold
-        for i in range(len(top_k_values)):
-            if top_k_values[i][-1] >= threshold:
+        # For each row in chunk, find top_k values
+        for i in range(end_idx - start_idx):
+            row_scores = cos_scores[i]
+            top_k_indices = np.argpartition(row_scores, -min_community_size)[-min_community_size:]
+            top_k_values = row_scores[top_k_indices]
+            
+            if top_k_values.min() >= threshold:
                 new_cluster = []
 
                 # Only check top k most similar entries
-                top_val_large, top_idx_large = cos_scores[i].topk(k=sort_max_size, largest=True)
+                sort_indices = np.argpartition(row_scores, -sort_max_size)[-sort_max_size:]
+                sort_scores = row_scores[sort_indices]
+                # Sort by score descending
+                sorted_idx = np.argsort(sort_scores)[::-1]
+                sort_indices = sort_indices[sorted_idx]
+                sort_scores = sort_scores[sorted_idx]
 
-                # Check if we need to increase sort_max_size
-                while top_val_large[-1] > threshold and sort_max_size < len(embeddings):
-                    sort_max_size = min(2 * sort_max_size, len(embeddings))
-                    top_val_large, top_idx_large = cos_scores[i].topk(k=sort_max_size, largest=True)
-
-                for idx, val in zip(top_idx_large.tolist(), top_val_large):
+                for idx, val in zip(sort_indices, sort_scores):
                     if val < threshold:
                         break
-
-                    new_cluster.append(idx)
+                    global_idx = idx
+                    new_cluster.append(global_idx)
 
                 extracted_communities.append(new_cluster)
-
-        del cos_scores
 
     # Largest cluster first
     extracted_communities = sorted(extracted_communities, key=lambda x: len(x), reverse=True)
@@ -319,3 +266,4 @@ def community_detection(embeddings, threshold=0.75, min_community_size=10, batch
     unique_communities = sorted(unique_communities, key=lambda x: len(x), reverse=True)
 
     return unique_communities
+

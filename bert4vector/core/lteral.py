@@ -11,7 +11,7 @@ from .base import PairedSimilarity, VectorSimilarity
 from ..snippets.distance import string_hash, hamming_distance, longest_common_substring_size, longest_common_subsequence_size
 from ..snippets.rank_bm25 import BM25Okapi
 from ..snippets.tfidf import TFIDF, load_stopwords, default_stopwords_file
-from ..snippets.util import cos_sim, semantic_search
+from ..snippets.util_torch import cos_sim, semantic_search
 
 
 pwd_path = os.path.abspath(os.path.dirname(__file__))

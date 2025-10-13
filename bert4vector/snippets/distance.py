@@ -6,7 +6,7 @@
 from difflib import SequenceMatcher
 
 import numpy as np
-from .util import cos_sim
+from .util_torch import cos_sim
 
 zero_bit = 1e-9
 
