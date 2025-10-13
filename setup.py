@@ -19,7 +19,7 @@ extra_require = {
 
 setup(
     name='bert4vector',
-    version='v0.0.7',
+    version='v0.0.7.post2',
     description='an elegant bert4vector',
     long_description=long_description,
     long_description_content_type="text/markdown",
