@@ -7,3 +7,4 @@ if is_torch_available():
     from .util_torch import *
 else:
     from .util_numpy import *
+    class torch_Tensor: pass

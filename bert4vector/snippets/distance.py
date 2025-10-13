@@ -4,9 +4,13 @@
 @description: 
 """
 from difflib import SequenceMatcher
-
 import numpy as np
-from .util_torch import cos_sim
+from torch4keras.snippets import is_torch_available
+
+if is_torch_available():
+    from .util_torch import cos_sim
+else:
+    from .util_numpy import cos_sim
 
 zero_bit = 1e-9
 
